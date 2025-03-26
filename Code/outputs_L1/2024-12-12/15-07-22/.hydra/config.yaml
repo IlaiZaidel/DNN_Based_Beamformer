@@ -1,0 +1,46 @@
+SavedModel: 0
+debug: 1
+params:
+  win_length: 512
+  R: ${params.win_length}//4
+  T: 4
+  M: 8
+  fs: 16000
+  mic_ref: 4
+  EnableCost: 1
+modelParams:
+  EnableSkipAttention: 1
+  activationSatge1: tanh
+  activationSatge2: sigmoid
+  channelsStage1: ${params.M}
+  channelsStage2: 1
+  numFeatures: (${params.fs}*${params.T} - ${params.win_length})/(${params.R}) + 1
+device:
+  device_num: 2
+loss:
+  loss: L1
+  norm: 0
+data_set_path: /dsi/gannot-lab1/datasets/Ilai_data/
+model_path: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/
+folder_name: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment
+paths:
+  rev_env: false
+  train_path: ${data_set_path}/Train/
+  test_path: ${data_set_path}/Test_set/
+  results_path: ${folder_name}/
+  modelData_path: ${model_path}/
+  log_path: /logs/${folder_name}/
+wandb:
+  project_name: DNN_Based_Beamformer
+  entity: ilaizaidel
+model_hp:
+  train_size_spilt: 0.75
+  val_size_spilt: 0.25
+  batchSize: 8
+  epochs: 100
+  data_loader_shuffle: true
+  test_loader_shuffle: false
+optimizer:
+  optimizer: Adam
+  learning_rate: 0.0001
+  weight_decay: 0.01
