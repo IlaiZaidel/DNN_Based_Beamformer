@@ -3,7 +3,7 @@ import soundfile as sf
 import numpy as np
 
 
-# This is for features
+# This is for features 2
 
 # Load the .mat file using the correct path
 mat_file_path = "/dsi/gannot-lab1/datasets/Ilai_data/Two_Directional_Noises_Test/my_feature_vector_1.mat" # 'feature', 'fulloriginal', 'fullnoise', 'target_s'
