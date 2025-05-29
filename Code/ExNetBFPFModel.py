@@ -35,9 +35,10 @@ class ExNetBFPF(nn.Module):
         self.unet_singleChannel = UNET(modelParams.channelsStage2,modelParams.activationSatge2,
                                        modelParams.EnableSkipAttention)
     
-    def forward(self, Y, device):   
+    def forward(self, Y, device):
+        #Y.shape - torch.Size([16, 8, 514, 497])   
         # Stage 1: Multi-Channel speech enhancement
-        W_timeChange,skip_Stage1 = self.unet_multiChannel(Y.float()) # W changes over time
+        W_timeChange,skip_Stage1 = self.unet_multiChannel(Y.float()) # W changes over time # W_timeChange.shape - > torch.Size([16, 8, 514, 497])
 
         # Apply mean to W_timeChange for getting timeFxed weights 
         W_timeFixed = torch.mean(W_timeChange,3)  

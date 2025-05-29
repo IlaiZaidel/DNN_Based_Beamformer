@@ -6,7 +6,7 @@ import scipy.io
 import matplotlib.pyplot as plt
 from datetime import datetime
 import scipy.io
-
+import pandas as pd
 # Add the parent directory to sys.path
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if parent_dir not in sys.path:
@@ -24,15 +24,18 @@ SAMPLE_RATE = 16000
 MIC_REF = 4  # Reference microphone
 
 # Set the feature index (change this to process a different sample)
-INDEX = 9  # Modify this value to select a different test sample
+INDEX =9 # Modify this value to select a different test sample
 
 # Paths to required files
-STFT_MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025/TEST_STFT_domain_results_25_03_2025__12_30_27_0.mat"
-FEATURE_MAT_FILE = f"/dsi/gannot-lab1/datasets/Ilai_data/Two_Directional_Noises_Test/my_feature_vector_{INDEX}.mat"
-OUTPUT_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen/plots"
-NAME = f"ILAI"
+CSV_PATH = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_test.csv"
+STFT_MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_05_2025/TEST_STFT_domain_results_28_05_2025__06_31_31_0.mat"
+
+OUTPUT_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen/28_05_plots"
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+
 
 def compute_beampattern_amplitudes(W_STFT_timeFixed):
     """
@@ -86,7 +89,7 @@ def plot_beampattern(amplitudes_sq, angle_x, angle_n1, angle_n2, index):
     # Plot source and noise angles
     ax.plot([np.pi / 2 - np.deg2rad(angle_x)], [0], 'ro', label='Speaker')
     ax.plot([np.pi / 2 - np.deg2rad(angle_n1)], [0], 'bo', label='Noise 1')
-    ax.plot([np.pi / 2 - np.deg2rad(angle_n2)], [0], 'go', label='Noise 2')
+    #ax.plot([np.pi / 2 - np.deg2rad(angle_n2)], [0], 'go', label='Noise 2')
 
     ax.set_theta_zero_location('N')
     ax.set_theta_direction(-1)
@@ -121,6 +124,14 @@ def plot_spectrogram(amplitudes_spec, index):
     plt.ylabel("Frequency (Hz)")
     plt.title(f"Spectrogram: Frequency vs DOA (Feature Index {index})")
 
+    # Add vertical lines and labels for angles
+    # for angle, color, label in zip([angle_x, angle_n1, angle_n2], ['red', 'blue', 'green'], ['Speaker', 'Noise 1', 'Noise 2']):
+    for angle, color, label in zip([angle_x, angle_n1], ['red', 'blue', 'green'], ['Speaker', 'Noise 1']):
+        plt.axvline(x=angle, color=color, linestyle='--', linewidth=2, label=label)
+        plt.text(angle + 1, frequencies.max() * 0.9, f"{label}\n{angle:.0f}°", color=color, fontsize=10, rotation=90, verticalalignment='top')
+
+    plt.legend(loc='upper right')
+
     # Save the figure instead of showing it
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = os.path.join(OUTPUT_DIR, f"spectrogram_index_{index}_{timestamp}.png")
@@ -129,15 +140,18 @@ def plot_spectrogram(amplitudes_spec, index):
     print(f"Spectrogram plot saved to {output_path}")
 
 if __name__ == "__main__":
+
+    # Load CSV
+    df = pd.read_csv(CSV_PATH)
+    row = df.iloc[INDEX]
     # Load STFT Mat file
     data_stft = scipy.io.loadmat(STFT_MAT_FILE)
-    W_STFT_timeFixed = torch.tensor(data_stft["W_STFT_timeFixed"][INDEX]).unsqueeze(0).to(DEVICE)
+    W_STFT_timeFixed = torch.tensor(data_stft["W_STFT_timeFixed"][INDEX%16]).unsqueeze(0).to(DEVICE)
 
-    # Load Feature Mat file
-    data_feature = scipy.io.loadmat(FEATURE_MAT_FILE)
-    angle_x = float(data_feature["angle_x"])
-    angle_n1 = float(data_feature["angle_n1"])
-    angle_n2 = float(data_feature["angle_n2"])
+
+    angle_x = float(row["angle_x"])
+    angle_n1 = float(row["angle_n1"])
+    angle_n2 = float(row["angle_n2"])
 
     # Compute and plot beampattern
     amplitudes_sq, amplitudes_spec = compute_beampattern_amplitudes(W_STFT_timeFixed)

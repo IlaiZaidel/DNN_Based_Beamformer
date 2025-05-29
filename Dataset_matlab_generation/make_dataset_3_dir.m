@@ -27,6 +27,8 @@ for example =  0
 %example = 18500;
 %while example <= 19999
     x =[];
+
+    
     folder_num = randi(NumOfFolders);
     folderName = fullfile(path,foldersNames(folder_num));
     subfolders = dir(folderName{:});
@@ -184,7 +186,7 @@ for example =  0
     % Specify the output folder and file name
   %  path_folder = '/dsi/gannot-lab1/datasets/Ilai_data/Two_Directional_Noises_Train';
     %path_folder = '/dsi/gannot-lab1/datasets/Ilai_data/Two_Directional_Noises_Test';
-    path_folder ='/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen';
+    path_folder ='/home/dsi/ilaiz/DNN_Based_Beamformer/Code/';
     name_file = append('my_feature_vector_', num2str(example), '.mat');
 
     % Attempt to save; if an error occurs, retry until successful

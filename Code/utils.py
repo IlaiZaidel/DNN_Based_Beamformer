@@ -233,3 +233,30 @@ def snr(signal: torch.Tensor, noise: torch.Tensor):
     avg_snr = torch.mean(snr_per_sample)  # Scalar
 
     return avg_snr
+
+def snr_np(signal: np.ndarray, noise: np.ndarray):
+    """
+    Compute the Signal-to-Noise Ratio (SNR) in dB, averaged across samples or batches.
+
+    Args:
+        signal (np.ndarray): Array of shape (signal_length,) or (batch_size, signal_length) – clean signal.
+        noise (np.ndarray): Array of shape (signal_length,) or (batch_size, signal_length) – noise.
+
+    Returns:
+        float: The average SNR in dB.
+    """
+    # If inputs are 1D, compute directly
+    if signal.ndim == 1:
+        signal_power = np.mean(signal ** 2)
+        noise_power = np.mean(noise ** 2)
+        return 10 * np.log10(signal_power / noise_power + 1e-10)
+    
+    # If inputs are 2D (batch_size, signal_length), compute SNR per batch and average
+    elif signal.ndim == 2:
+        signal_power = np.mean(signal ** 2, axis=1)
+        noise_power = np.mean(noise ** 2, axis=1)
+        snr_per_sample = 10 * np.log10(signal_power / noise_power + 1e-10)
+        return np.mean(snr_per_sample)
+    
+    else:
+        raise ValueError("Input signal must be 1D or 2D.")

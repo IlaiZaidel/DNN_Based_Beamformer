@@ -23,7 +23,7 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
     model.train()
     
     #for i, (y, labels_x, fullnoise) in tqdm(enumerate(train_loader)): # on batch # 20.3 - I need to change it back to one noise only
-    for i, (y, labels_x, fullnoise_first, fullnoise_second) in tqdm(enumerate(train_loader)): # on batch
+    for i, (y, labels_x, fullnoise_first, fullnoise_second, white_noise) in tqdm(enumerate(train_loader),total=len(train_loader)): # on batch
         # Extract Data
         y = y.to(device)                    # y = B,T*fs,M - noisy signal in the time domain
         fullLabels_x = labels_x.to(device)  # x = B,T*fs,M - target signal in the time domain  
@@ -59,7 +59,7 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
         # Perform ISTFT and norm for x_hat
         x_hat_stage2_B_norm = Postprocessing(X_hat_Stage2,R,win_len,device)
         max_x = torch.max(abs(x_hat_stage2_B_norm),dim=1).values
-        x_hat_stage2= (x_hat_stage2_B_norm.T/max_x).T       
+        x_hat_stage2_time=x_hat_stage2_B_norm #(x_hat_stage2_B_norm.T/max_x).T       
         
         # Preprocessing & Postprocessing for the labeled signal
         X_stft = Preprocesing(fullLabels_x, win_len, fs, T, R, device) # torch.Size([8, 8, 514, 497])
@@ -67,9 +67,9 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
         X_stft_mic_ref,_,_ =  beamformingOpreation(X_stft,mic_ref) # No beamformer W in the function, it takes only signal as recorded/
         x = Postprocessing(X_stft_mic_ref,R,win_len,device) # speech as recorded in reference microphone
         max_x = torch.max(abs(x),dim=1).values
-        x = (x.T/max_x).T
+       # x = (x.T/max_x).T
         X_stft = return_as_complex(X_stft) #torch.Size([8, 8, 257, 497])
-        loss,loss_L1, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white, SNR_output ,si_sdr_loss,cost_minimum_variance_two= compute_loss(x, X_stft, Y, X_hat_Stage1, x_hat_stage2, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first, fullnoise_second, win_len, fs, T, R, device, cfg_loss, args)
+        loss,loss_L1, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white, SNR_output ,si_sdr_loss,cost_minimum_variance_two,loss_W_L1= compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first, fullnoise_second, white_noise, win_len, fs, T, R, device, cfg_loss, args)
         # Log metrics to wandb
         wandb.log({
             "batch_loss_train": loss.item(),
@@ -80,6 +80,7 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
             "SNR_output": SNR_output.item(),
             "SI-SDR": si_sdr_loss.item(),
             "cost_minimum_variance_two" : cost_minimum_variance_two.item(),
+            "loss_W_L1" : loss_W_L1.item()
         })
 
         # ---------------

@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.utils
 from torch.utils.data import DataLoader
 #from sklearn.model_selection import train_test_split
-from generate_dataset import GeneretedInputOutput
+from generate_dataset import GeneretedInputOutput,GeneretedData
 import hydra
 import os
 from datetime import datetime
@@ -44,7 +44,7 @@ def main(cfg: CUNETConfig):
         # Load Data (Train & Val)
         train_path = cfg.paths.train_path
         train_data = GeneretedInputOutput(train_path,cfg.params.mic_ref)
-        
+        train_data=GeneretedData(cfg)
         # Create train & validation set 
         # train_set, val_set = train_test_split(train_data,train_size = cfg.model_hp.train_size_spilt,test_size = cfg.model_hp.val_size_spilt)  
         train_set, val_set = torch.utils.data.random_split(train_data,[cfg.model_hp.train_size_spilt, cfg.model_hp.val_size_spilt])  

@@ -6,9 +6,9 @@ function [h_n,a_n,a_n_scnd,information] = create_room_3_dir(PlotRoom)
    % Parameters
    c_k = 340;                      % Sound velocity (m/s)
    fs = 16000;                     % Sample frequency (samples/s)
-   Vbeta = (0.3:0.05:0.5);         % Possible values for beta
-   idx = randi(numel(Vbeta));      % Random index selection
-   beta = Vbeta(idx);              % Reverberation time (s)
+   %Vbeta = (0.3:0.05:0.5);         % Possible values for beta
+   %idx = randi(numel(Vbeta));      % Random index selection
+   beta = 0; % Vbeta(idx);              % Reverberation time (s)
    n = fs*beta;                    % Number of samples
    mtype = 'omnidirectional';      % Type of microphone
    order = 0;                     % -1 equals maximum reflection order!

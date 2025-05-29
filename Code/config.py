@@ -22,9 +22,11 @@ class Params:
     T: int                   # The length of the signal in the time domain 
     M: int                   # Number of microphones
     fs: int                  # Sample rate
+    ck: int
     mic_ref: int             # Reference microphone index
     EnableCost: int          # Flag to enable regularization term in the loss function
     beta_mv_dir: int           # Weight of the MVDR regularization term
+    mu : int
     beta_mv_white: int
     Enable_cost_L1: int
     Enable_cost_L2: int
@@ -67,6 +69,11 @@ class Optimizer:
     weight_decay: float      # Weight decay
 
 @dataclass 
+class Dataset:
+    df_path_train: str   
+    df_path_test: str 
+
+@dataclass 
 class CUNETConfig:
     paths: Paths             # Paths configuration
     params: Params           # Parameters configuration
@@ -75,3 +82,4 @@ class CUNETConfig:
     loss: Loss               # Loss configuration
     model_hp: Model_HP       # Model hyperparameters configuration
     optimizer: Optimizer     # Optimizer configuration
+

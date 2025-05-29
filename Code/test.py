@@ -20,7 +20,7 @@ def test(model, args, results_path, test_loader, device, cfg_loss, iftest):
     model.eval()   
        
     with torch.no_grad():
-        for i, (y, labels_x, fullnoise_first, fullnoise_second) in enumerate(test_loader):
+        for i, (y, labels_x, fullnoise_first, fullnoise_second,white_noise) in enumerate(test_loader):
             # Extract Data
             y = y.to(device)                    # y = B,T*fs,M - noisy signal in the time domain
             fullLabels_x = labels_x.to(device)  # x = B,T*fs,M - target signal in the time domain
@@ -47,25 +47,31 @@ def test(model, args, results_path, test_loader, device, cfg_loss, iftest):
 
             # Perform ISTFT and norm for x_hat
             x_hat_stage2_B_norm = Postprocessing(X_hat_Stage2,R,win_len,device)
-            max_x = torch.max(abs(x_hat_stage2_B_norm),dim=1).values
-            x_hat_stage2 = (x_hat_stage2_B_norm.T/max_x).T            
+          #  max_x = torch.max(abs(x_hat_stage2_B_norm),dim=1).values
+            x_hat_stage2_time = x_hat_stage2_B_norm #(x_hat_stage2_B_norm.T/max_x).T            
 
             # Preprocessing & Postprocessing for the labeled signal
             X_stft = Preprocesing(fullLabels_x, win_len, fs, T, R, device) 
             X_stft_mic_ref,_,_ =  beamformingOpreation(X_stft,mic_ref)
             x = Postprocessing(X_stft_mic_ref,R,win_len,device)
             max_x = torch.max(abs(x),dim=1).values
-            x = (x.T/max_x).T
+           # x = (x.T/max_x).T
 
             # Calculate the loss function 
             #loss = Loss(x,x_hat_stage2,cfg_loss)*args.Enable_cost_mae        
             #loss,loss_mae, cost_distortionless, cost_minimum_variance_dir = compute_loss(x, X_stft, Y, x_hat_stage2, W_Stage1, W_Stage2, fullLabels_x, fullnoise, win_len, fs, T, R, device, cfg_loss, args)
             X_stft = return_as_complex(X_stft) #torch.Size([8, 8, 257, 497])
-            loss,loss_L2, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white,_ ,_,_= compute_loss(x, X_stft, Y, X_hat_Stage1, x_hat_stage2, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first,fullnoise_second, win_len, fs, T, R, device, cfg_loss, args)
+            loss,loss_L2, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white,_,_,_,_= compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first,fullnoise_second,white_noise, win_len, fs, T, R, device, cfg_loss, args)
 
             # Backward & Optimize     
             epoch_test_loss += loss.item() 
-            
+
+            # Normalizing: 
+
+            x = (x.T/max_x).T
+            max_x = torch.max(abs(x_hat_stage2_B_norm),dim=1).values
+            x_hat_stage2 = (x_hat_stage2_B_norm.T/max_x).T            
+
             # Save results
             if iftest == 1:
                 saveResults(Y,X_stft,skip_Stage1,skip_Stage2,W_Stage1,W_timeChange,W_Stage2,X_hat_Stage1,X_hat_Stage2,

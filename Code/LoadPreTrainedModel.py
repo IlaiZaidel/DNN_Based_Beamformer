@@ -14,7 +14,7 @@ def loadPreTrainedModel(cfg):
     else: # Non-Reverberant Environment
         PATH = cfg.paths.modelData_path + 'trained_model_dataset_withoutRev.pt'
         # Load the model with the best saved weights
-        model = torch.load(PATH)
+        model = torch.load(PATH, weights_only=False)
 
     return model
 

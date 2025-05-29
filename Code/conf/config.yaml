@@ -1,4 +1,4 @@
-SavedModel: 1 # Load of a trained model 
+SavedModel: 0 # Load of a trained model 
 debug: 1      # Print debug massages
 
 # =========== Parameters ===========
@@ -8,17 +8,20 @@ params:
   T: 4                        # The length of the signal in the time domain 
   M: 8                        # Number of microphones
   fs: 16000                   # Sample rate
+  ck: 343                     # Sound velocity
   mic_ref: 4                  # Reference microphone index
   EnableCost: 0               # Flag to enable regularization term in the loss function
-  beta_mv_dir: 0              # Weight of the minimum variance for the directional noise
+  mu : 0 #1                      # Weight that helps sum everything to 1: mu/(1+mu) and 1/(1+mu)    #Important
+  beta_mv_dir:  0          # Weight of the minimum variance for the directional noise
   beta_mv_white: 0            # Weight of the minimum variance for the white noise
-  Enable_cost_L1: 0 #200000
+  Enable_cost_L1: 1000 #200000
   Enable_cost_L2: 0
-  beta_dr: 1 #1                  # Distortionless Response weight
+  beta_dr: 1 # 0.00001 # 1/100000  --- Normalizing it to be 1 # "1/(1 - ${params.mu})"   #1                  # Distortionless Response weight                #Important
   beta_SIR: 0
-  beta_SISDR: 0 
-  white_only_enable: 0 #1000
-  two_dir_noise: 10
+  beta_SISDR: 0 # by 1/2 - Normalizing it to be 2 or 3
+  white_only_enable: 0 #1000  
+  two_dir_noise: 1.5 # 1/100 - Normalizing it to be 1 "${params.mu}/(1 - ${params.mu})"                                                       # Important
+  weight_L1_regularization: 0
 modelParams:
   EnableSkipAttention: 1      # Flag to enable attention in the skip connections
   activationSatge1: tanh      # Activation fnction at the end of the UNET in stage1
@@ -40,13 +43,13 @@ loss:
 # ========== data-sets ==============
 # Define main paths for datasets, models, and special cases
 data_set_path: /dsi/gannot-lab1/datasets/Ilai_data/ # /home/dsi/ilaiz/DNN_Based_Beamformer/Code/processed_data  #/home/dsi/ilaiz/DNN_Based_Beamformer/Code//Dataset/Non-Reverberant Environment/Speaker Switch # Main path of the dataset
-#model_path:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/25_03_2025   #'/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/'     # Main path of the model
-#folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025 # The main name of the results folder  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/30_12_2024   # 
+model_path:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/28_05_2025   #'/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/'     # Main path of the model
+folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_05_2025 # The main name of the results folder  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/30_12_2024   # 
 # For beampattern analysis:
 # Model results:
-folder_name:  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/ADI_2_noises_25_03
+#folder_name:  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/ADI_2_noises_25_03
 # Model parameters:
-model_path: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/  
+#model_path: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/  
 
 paths: 
   rev_env: False                                  # False -> Non-Reverberant Environment; True->Reverberant Environment
@@ -67,7 +70,7 @@ model_hp:
   val_size_spilt: 0.25        # Validation size split
   batchSize: 16   #16   #8         # Number of samples in a mini-batch
   epochs: 100                 # Maximum number of iterations   
-  data_loader_shuffle: True   # Flag to shuffle data in data loader (train & val)
+  data_loader_shuffle: False   # Flag to shuffle data in data loader (train & val)
   test_loader_shuffle: False  # Flag to shuffle data in test loader
 
 # ============ Optimizer ============
@@ -80,3 +83,8 @@ optimizer:
 hydra:
   run:
     dir: outputs_${loss.loss}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# ========== Dataset ==========
+dataset:
+  df_path_train: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters.csv
+  df_path_test: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_test.csv
