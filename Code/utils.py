@@ -39,7 +39,7 @@ def Preprocesing(y, win_len, fs, T, R, device):
     y = y.permute(0,2,1).contiguous().view(B*M,-1)         # y = B*M,T*fs = B*8,64000 
 
     # STFT transformation 
-    w_analysis = torch.hamming_window(win_len).to(device)
+    w_analysis = torch.hamming_window(win_len, device = device)#.to(device)
     Y = torch.stft(y, n_fft=win_len, hop_length=int(R), win_length=win_len, window=w_analysis, center=False, return_complex = False)# , return_complex=False)  #ILAI: I added the return_complex=True
     #print("Shape of Y:", Y.size()) 
     B_M, F, L, C = Y.size()      # Y = B*M,F,L,C = B*8,257,497,2   _, F, L = Y.size()
@@ -260,3 +260,12 @@ def snr_np(signal: np.ndarray, noise: np.ndarray):
     
     else:
         raise ValueError("Input signal must be 1D or 2D.")
+    
+
+
+def place_source_2d(azimuth_deg, distance, mic_center):
+    az = np.deg2rad(azimuth_deg)
+    x = distance * np.cos(az)
+    y = distance * np.sin(az)
+    z = 0  # default elevation
+    return [mic_center[0] + x, mic_center[1] + y, mic_center[2] + z]

@@ -16,7 +16,7 @@ if parent_dir not in sys.path:
 from utils import Preprocesing, return_as_complex, Postprocessing
 
 # Constants
-DEVICE_ID = 2  # Set based on your system
+DEVICE_ID = 1  # Set based on your system
 DEVICE = torch.device(f"cuda:{DEVICE_ID}" if torch.cuda.is_available() else "cpu")
 WIN_LEN = 512
 HOP_LEN = WIN_LEN // 4
@@ -24,13 +24,13 @@ SAMPLE_RATE = 16000
 MIC_REF = 4  # Reference microphone
 
 # Set the feature index (change this to process a different sample)
-INDEX =9 # Modify this value to select a different test sample
+INDEX =11 # Modify this value to select a different test sample
 
 # Paths to required files
 CSV_PATH = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_test.csv"
-STFT_MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_05_2025/TEST_STFT_domain_results_28_05_2025__06_31_31_0.mat"
+STFT_MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/10_06_2025/TEST_STFT_domain_results_10_06_2025__05_37_59_0.mat"
 
-OUTPUT_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen/28_05_plots"
+OUTPUT_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen/10_06_plots"
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

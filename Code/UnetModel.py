@@ -101,8 +101,9 @@ class UNET(nn.Module):
         activation (int): Activation fnction at the end of the UNET.
         EnableSkipAttention (True/False): Flag to enable attention in the skip connections.
     """
-    def __init__(self, in_channel, activation = 'sigmoid', EnableSkipAttention = 0):
+    def __init__(self, in_channel, activation = 'sigmoid', EnableSkipAttention = 0, use_rtf=True):
         super(UNET, self).__init__()
+        self.use_rtf = use_rtf # Flag
         self.EnableSkipAttention = EnableSkipAttention
 
         # Encoder blocks
@@ -114,6 +115,37 @@ class UNET(nn.Module):
         self.conv_block_6 = CausalConvBlock(96,  96,  (6, 6), (2, 2))
         self.conv_block_7 = CausalConvBlock(96,  128, (2, 2), (2, 2))
         self.conv_block_8 = CausalConvBlock(128, 256, (2, 2), (1, 1))
+
+        # Only register rtf_encoder if we want to use it
+        if self.use_rtf:
+            self.rtf_encoder = nn.Sequential(
+                # Input: [B, 8, 514, 497]
+                nn.Conv2d(8, 64, kernel_size=(7, 7), stride=(4, 4), padding=(3, 3)),   # [B, 64, 129, 125]
+                nn.BatchNorm2d(64),
+                nn.Dropout2d(0.5),
+                nn.LeakyReLU(inplace=True),
+
+                nn.Conv2d(64, 128, kernel_size=(5, 5), stride=(5, 5), padding=(2, 2)),  # [B, 128, 26, 25]
+                nn.BatchNorm2d(128),
+                nn.Dropout2d(0.5),
+                nn.LeakyReLU(inplace=True),
+
+                nn.Conv2d(128, 256, kernel_size=(3, 3), stride=(3, 3), padding=(1, 1)),  # [B, 256, 9, 9]
+                nn.BatchNorm2d(256),
+                nn.Dropout2d(0.5),
+                nn.LeakyReLU(inplace=True),
+
+                nn.AdaptiveAvgPool2d((1, 1))  # Final: [B, 256, 1, 1]
+            )
+            #self.bottleneck_fusion = nn.Conv2d(512, 256, kernel_size=1)
+            # Attention-based fusion: learn how to combine e8 and RTF-encoded features
+            self.attn_layer = nn.Sequential(
+                nn.Conv2d(512, 256, kernel_size=1),
+                nn.Sigmoid()
+            )
+        else:
+            self.rtf_encoder = None  # Important!
+            self.attn_layer  = None
 
         # Decoder blocks
         self.tran_conv_block_1 = nn.Sequential(
@@ -152,18 +184,26 @@ class UNET(nn.Module):
         else:
             self.dense = nn.Sequential(nn.Linear(514, 514),nn.Sigmoid())
 
-    def forward(self, x):
+
+    def forward(self, x, rtf=None):
         skip = torch.zeros_like(x)
-        
+        # x shape is torch.Size([16, 8, 514, 497])
         # Encoder blocks
-        e1 = self.conv_block_1(x)
-        e2 = self.conv_block_2(e1)
-        e3 = self.conv_block_3(e2)
-        e4 = self.conv_block_4(e3)
-        e5 = self.conv_block_5(e4)
-        e6 = self.conv_block_6(e5)
-        e7 = self.conv_block_7(e6)
-        e8 = self.conv_block_8(e7)
+        e1 = self.conv_block_1(x)  #torch.Size([16, 32, 255, 248])
+        e2 = self.conv_block_2(e1) #torch.Size([16, 32, 125, 123])
+        e3 = self.conv_block_3(e2) #torch.Size([16, 64, 60, 60])
+        e4 = self.conv_block_4(e3) #torch.Size([16, 64, 28, 28])
+        e5 = self.conv_block_5(e4) #torch.Size([16, 96, 12, 12])
+        e6 = self.conv_block_6(e5) #torch.Size([16, 96, 4, 4])
+        e7 = self.conv_block_7(e6) #torch.Size([16, 128, 2, 2])
+        e8 = self.conv_block_8(e7) #torch.Size([16, 256, 1, 1])
+
+        if self.rtf_encoder is not None and rtf is not None:
+            # rtf shape is torch.Size([8, 8, 514, 497])
+            rtf_encoded = self.rtf_encoder(rtf)  # [B, 256, 1, 1]
+            fused = torch.cat([e8, rtf_encoded], dim=1)  # [B, 512, 1, 1]
+            attn = self.attn_layer(fused)  # [B, 256, 1, 1], between 0-1
+            e8 = e8 * attn  # Apply attention weights
 
         if self.EnableSkipAttention == 0: # Standard mode
             EnableSkipAtt = 0

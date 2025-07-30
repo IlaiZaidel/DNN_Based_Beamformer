@@ -20,14 +20,26 @@ def test(model, args, results_path, test_loader, device, cfg_loss, iftest):
     model.eval()   
        
     with torch.no_grad():
-        for i, (y, labels_x, fullnoise_first, fullnoise_second,white_noise) in enumerate(test_loader):
+        for i, (y, labels_x, fullnoise_first,white_noise) in enumerate(test_loader):
             # Extract Data
             y = y.to(device)                    # y = B,T*fs,M - noisy signal in the time domain
             fullLabels_x = labels_x.to(device)  # x = B,T*fs,M - target signal in the time domain
             labels_x = torch.unsqueeze(fullLabels_x[:,:,mic_ref-1],2) # x_ref - B,T*fs,1 - target signal ref in the time domain  
-            
+            fullnoise_second =  torch.tensor(0.0, device=device)
             # Perform STFT and Padding
             Y = Preprocesing(y, win_len, fs, T, R, device)  # Y = B,M,2*F,L - noisy signal in the STFT domain
+
+            ##########################################
+            # RTF calculation, maybe delete 
+            noise_only_time = args.noise_only_time
+            # RTF Etimation:
+            Y_complex =  return_as_complex(Y) #torch.Size([16, 8, 257, 497])
+
+            with torch.no_grad():
+                rtf_cw = covariance_whitening(Y_complex, noise_only_time)
+                rtf_cw = fix_covariance_whitening(rtf_cw)
+                rtf_real = torch.cat([rtf_cw.real, rtf_cw.imag], dim=2)
+            ##########################################
             
             # Forward
             W_timeChange,X_hat_Stage1,Y,W_Stage1,X_hat_Stage2,W_Stage2,skip_Stage1,skip_Stage2 = model(Y, device)

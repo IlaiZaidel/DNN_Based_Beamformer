@@ -3,9 +3,9 @@ import soundfile as sf
 import numpy as np
 # Load the .mat file using the correct path
 #mat_file_path = "/dsi/gannot-lab1/datasets/Ilai_data/Two_Directional_Noises_Train" # 'feature', 'fulloriginal', 'fullnoise', 'target_s'
-#mat_file_path ="/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025/TEST_STFT_domain_results_25_03_2025__12_30_27_0.mat"
+#mat_file_path ="/home/dsi/43rrrilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025/TEST_STFT_domain_results_25_03_2025__12_30_27_0.mat"
 #mat_file_path ="/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025/TEST_time_domain_results_25_03_2025__12_30_27_0.mat"
-mat_file_path = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_05_2025/TEST_time_domain_results_28_05_2025__06_31_31_0.mat"
+mat_file_path = "DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/10_06_2025/TEST_time_domain_results_10_06_2025__05_37_59_0.mat"
 mat_data = scipy.io.loadmat(mat_file_path)
 print("Keys in mat_data:", mat_data.keys())
 
@@ -37,7 +37,7 @@ sample_rate = 16000  # Define the sample rate
 for i in range(num_examples):
     audio_example = audio_signals[i, :] # Extract the i-th example   audio_signals[i, :]
     #audio_example = normalize(audio_example)
-    output_file = f"28_05_x_hat_stage2_{i}.wav"  # Name each output file uniquely #31_01_TEMP_x_hat_stage1_audio_{i+1}.wav
+    output_file = f"10_06_x_hat_stage2_{i}.wav"  # Name each output file uniquely #31_01_TEMP_x_hat_stage1_audio_{i+1}.wav
     sf.write(output_file, audio_example, sample_rate)  # Save as WAV file
     print(f"Saved audio example {i} to {output_file}")
 

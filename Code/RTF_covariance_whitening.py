@@ -1,8 +1,8 @@
 import torch
 import numpy as np
-
-
-
+###########################################
+# CORRECT RTF ESTIMATION
+###########################################
 def RTF_Cov_W(Rnn, Ryy, B, M, F, L):
 
     mic_ref = 4
@@ -39,7 +39,7 @@ def RTF_Cov_W(Rnn, Ryy, B, M, F, L):
     return a
 
 
-def noise_estimation(noise, B, F, M, Ln):
+def noise_estimation(noise, Ln):
 
     # Extract the relevant slices of the noise tensor
     n_k_sliced = noise[:, :, :, :Ln]  # Shape: (B, M, F, Ln)
@@ -50,9 +50,9 @@ def noise_estimation(noise, B, F, M, Ln):
     Rnn = Rnn.to(torch.complex64)
     return Rnn
 
-def mix_estimation(Y, B, F, M, L):
+def mix_estimation(Y, L, Ln):
 
-    Ln = 62  # Assumed pre-computed
+    #Ln = 62  # Assumed pre-computed
     # Extract the relevant slices of the mixture tensor
     Y_k_sliced = Y[:, :, :, Ln:L]  # Shape: (B, M, F, L-Ln)
     
@@ -61,11 +61,13 @@ def mix_estimation(Y, B, F, M, L):
     Ryy = Ryy.to(torch.complex64)
     return Ryy
 
-def covariance_whitening(Y):
+def covariance_whitening(Y, noise_time_only):
     B, M, F, L = Y.size()  
-    Ln = 62
-    Rnn = noise_estimation(Y, B, F, M, Ln)
-    Ryy = mix_estimation(Y, B, F, M, L)
+    fs = 16000
+    hop_size = 128
+    Ln = int(noise_time_only * fs // hop_size)
+    Rnn = noise_estimation(Y,  Ln)
+    Ryy = mix_estimation(Y, L, Ln)
     a_cw = RTF_Cov_W(Rnn, Ryy, B, M, F, L)
     a_cw = a_cw.unsqueeze(-1) 
     return a_cw

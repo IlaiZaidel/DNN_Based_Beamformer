@@ -133,7 +133,7 @@ class GeneretedData(Dataset):
         
         # Zero-pad the beginning to simulate the noise period
         T = self.cfg.params.T  # Total duration in seconds
-        noise_time = 0.5  # Seconds of noise at the start
+        noise_time = self.cfg.modelParams.noise_only_time # Seconds of noise at the start
         zero_pad = np.zeros((int(fs * noise_time), M))
         d = np.vstack((zero_pad, d[:int(fs * (T - noise_time)), :]))
 
@@ -190,5 +190,5 @@ class GeneretedData(Dataset):
         n_1 /= max_y
         n_2 /= max_y
         v /= max_y 
-        return y, d, n_1, n_2, v
+        return y, d, n_1, v
 
