@@ -13,13 +13,14 @@ hop = 32                      # Motion step size
 fs = 16000                    # Will be updated from WAV
 
 # --- Load source signal ---
-in_signal, fs = sf.read('/home/dsi/ilaiz/DNN_Based_Beamformer/Code/signal_generator/female_speech.wav')
+in_signal, fs = sf.read('female_speech.wav')
 if in_signal.ndim > 1:
     in_signal = in_signal[:, 0]  # Use first channel
 
+# in_signal = in_signal[:4 * fs]          # Trim to 4 seconds
+# in_signal = np.tile(in_signal, 2)       # Duplicate to 2 channels
 T = len(in_signal)                      # Total time steps
-# T = fs*10
-# in_signal = 0.9*np.sin(2*np.pi*880*np.linspace(0,5,T))
+
 # --- Receiver positions [M x 3] ---
 rp = np.array([
     [1.5, 2.4, 3.0],
@@ -29,8 +30,8 @@ M = rp.shape[0]
 cp = np.mean(rp, axis=0)
 
 # --- Source movement: linear path ---
-start = np.array([2.0, 1.0, 3.0])
-stop  = np.array([2.0, 3.0, 3.0])
+start = np.array([2.5, 4.5, 3.0])
+stop  = np.array([2.5, 0.5, 3.0])
 sp_path = np.zeros((T, 3))
 rp_path = np.zeros((T, 3, M))
 
@@ -54,7 +55,7 @@ result = gen.generate(
     nsamples=nsamples,
     mtype="o",
     order=order,
-    hp_filter=True
+    hp_filter=False
 )
 
 # --- Plotting source & mic positions ---
