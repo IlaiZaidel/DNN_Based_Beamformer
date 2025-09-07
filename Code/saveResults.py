@@ -22,8 +22,8 @@ def saveResults(Y,X,skip_Stage1,skip_Stage2,W,W_timeChange,W_Stage2,X_hat_Stage1
     skip_Stage1 = (skip_Stage1).cpu()
     skip_Stage1 = (skip_Stage1).detach().numpy()
     # save skip connection of stage 2
-    skip_Stage2 = (skip_Stage2).cpu()
-    skip_Stage2 = (skip_Stage2).detach().numpy()
+    # skip_Stage2 = (skip_Stage2).cpu()
+    # skip_Stage2 = (skip_Stage2).detach().numpy()
     # Save W timeFixed 
     W_STFT_timeFixed = (W).cpu()
     W_STFT_timeFixed = (W_STFT_timeFixed).detach().numpy()
@@ -53,7 +53,7 @@ def saveResults(Y,X,skip_Stage1,skip_Stage2,W,W_timeChange,W_Stage2,X_hat_Stage1
         "X_hat_Stage1": X_hat_Stage1,
         "X_hat_Stage2": X_hat_Stage2,
         "skip_Stage1": skip_Stage1,
-        "skip_Stage2": skip_Stage2
+        # "skip_Stage2": skip_Stage2
     }
 
     # Save the dictionary as .mat file

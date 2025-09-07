@@ -36,8 +36,11 @@ class ExNetBFPF(nn.Module):
         # Create the first and second stage UNET
         self.unet_multiChannel  = UNET(modelParams.channelsStage1,modelParams.activationSatge1,
                                        modelParams.EnableSkipAttention, use_rtf=True)
-        self.unet_singleChannel = UNET(modelParams.channelsStage2,modelParams.activationSatge2,
-                                       modelParams.EnableSkipAttention, use_rtf=False)
+        # Ilai 2/8/25
+        # Delete this
+        # self.unet_singleChannel = UNET(modelParams.channelsStage2,modelParams.activationSatge2,
+        #                                modelParams.EnableSkipAttention, use_rtf=False)
+        # Delete
         self.modelParams = modelParams
     
     def forward(self, Y,  device):
@@ -86,6 +89,10 @@ class ExNetBFPF(nn.Module):
 
         W_timeChange,skip_Stage1 = self.unet_multiChannel(Y.float(),rtf_real) # W changes over time # W_timeChange.shape - > torch.Size([16, 8, 514, 497])
 
+
+
+        # Ilai, 30/07/2025
+        # This needs to change
         # Apply mean to W_timeChange for getting timeFxed weights 
         W_timeFixed = torch.mean(W_timeChange,3)  
         
@@ -94,14 +101,19 @@ class ExNetBFPF(nn.Module):
         W_timeFixed[:,:,-1] = torch.zeros_like(W_timeFixed[:,:,-1])
         
         # Beamforming Operation 
-        X_hat_Stage1_C,X_hat_satge1,Y,W_Stage1 = beamformingOperationStage1(Y, W_timeFixed)     
-
+        # X_hat_Stage1_C,X_hat_satge1,Y,W_Stage1 = beamformingOperationStage1(Y, W_timeFixed)     
+        X_hat_Stage1_C,X_hat_satge1,Y,W_Stage1 = beamformingOperationStage1(Y, W_timeChange)   
 
         # rtf_zeros = torch.zeros_like(rtf_real)
         # Stage 2: Single-Channel speech enhancement
-        W_Stage2,skip_Stage2 = self.unet_singleChannel(X_hat_satge1.float())
-
-        # Mask Operation
-        X_hat_Stage2_C,_,_ = MaskOperationStage2(X_hat_Stage1_C, W_Stage2)       
+        # IlaiZ 02/08 Dont need
+        # W_Stage2,skip_Stage2 = self.unet_singleChannel(X_hat_satge1.float())
         
-        return W_timeChange,X_hat_Stage1_C,Y,W_Stage1,X_hat_Stage2_C,W_Stage2,skip_Stage1,skip_Stage2
+        # # Mask Operation
+        # X_hat_Stage2_C,_,_ = MaskOperationStage2(X_hat_Stage1_C, W_Stage2)       
+        
+        # return W_timeChange,X_hat_Stage1_C,Y,W_Stage1,X_hat_Stage2_C,W_Stage2,skip_Stage1,skip_Stage2
+        B, _, F, L = Y.shape  # Y is shape [B, M, F, L]
+        W_Stage2 = torch.zeros((B, 1, F, L), dtype=W_timeChange.dtype, device=W_timeChange.device)
+
+        return W_timeChange,X_hat_Stage1_C,Y,W_Stage1,None,W_Stage2,skip_Stage1,None

@@ -117,7 +117,7 @@ class UNET(nn.Module):
         self.conv_block_8 = CausalConvBlock(128, 256, (2, 2), (1, 1))
 
         # Only register rtf_encoder if we want to use it
-        if self.use_rtf:
+        if False:
             self.rtf_encoder = nn.Sequential(
                 # Input: [B, 8, 514, 497]
                 nn.Conv2d(8, 64, kernel_size=(7, 7), stride=(4, 4), padding=(3, 3)),   # [B, 64, 129, 125]
@@ -186,10 +186,14 @@ class UNET(nn.Module):
 
 
     def forward(self, x, rtf=None):
+        # Ilai Z 
+        # Changing from reciving x to reciving rtf
         skip = torch.zeros_like(x)
         # x shape is torch.Size([16, 8, 514, 497])
         # Encoder blocks
-        e1 = self.conv_block_1(x)  #torch.Size([16, 32, 255, 248])
+        rtf_rand =  torch.zeros_like(rtf)
+        # e1 = self.conv_block_1(x)  #torch.Size([16, 32, 255, 248])
+        e1 = self.conv_block_1(rtf)  #torch.Size([16, 32, 255, 248])
         e2 = self.conv_block_2(e1) #torch.Size([16, 32, 125, 123])
         e3 = self.conv_block_3(e2) #torch.Size([16, 64, 60, 60])
         e4 = self.conv_block_4(e3) #torch.Size([16, 64, 28, 28])
@@ -198,12 +202,12 @@ class UNET(nn.Module):
         e7 = self.conv_block_7(e6) #torch.Size([16, 128, 2, 2])
         e8 = self.conv_block_8(e7) #torch.Size([16, 256, 1, 1])
 
-        if self.rtf_encoder is not None and rtf is not None:
-            # rtf shape is torch.Size([8, 8, 514, 497])
-            rtf_encoded = self.rtf_encoder(rtf)  # [B, 256, 1, 1]
-            fused = torch.cat([e8, rtf_encoded], dim=1)  # [B, 512, 1, 1]
-            attn = self.attn_layer(fused)  # [B, 256, 1, 1], between 0-1
-            e8 = e8 * attn  # Apply attention weights
+        # if self.rtf_encoder is not None and rtf is not None:
+        #     # rtf shape is torch.Size([8, 8, 514, 497])
+        #     rtf_encoded = self.rtf_encoder(rtf)  # [B, 256, 1, 1]
+        #     fused = torch.cat([e8, rtf_encoded], dim=1)  # [B, 512, 1, 1]
+        #     attn = self.attn_layer(fused)  # [B, 256, 1, 1], between 0-1
+        #     e8 = e8 * attn  # Apply attention weights
 
         if self.EnableSkipAttention == 0: # Standard mode
             EnableSkipAtt = 0
@@ -223,7 +227,8 @@ class UNET(nn.Module):
         if self.EnableSkipAttention == 0: # Standard mode
             d = self.last_conv_block(d)
         else: # Attention mode
-            d,skip = self.last_conv_block(d, x, EnableSkipAtt)
+           # d,skip = self.last_conv_block(d, x, EnableSkipAtt) # 07 . 08 Ilai Z
+            d,skip = self.last_conv_block(d, rtf, EnableSkipAtt)
 
         d = d.permute(0,1,3,2)
         d = self.dense(d).permute(0,1,3,2)

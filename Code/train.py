@@ -60,14 +60,16 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
 
         # Forward
         # model = W_timeChange,X_hat_Stage1_C,Y,W_Stage1,X_hat_Stage2_C,W_Stage2,skip_Stage1,skip_Stage2
-        _,X_hat_Stage1,Y,W_Stage1,X_hat_Stage2,W_Stage2,_,_ = model(Y, device) # Y now has the size of torch.Size([8, 8, 257, 497]) (viewed as complex)
+        W_timeChange,X_hat_Stage1,Y,W_Stage1,X_hat_Stage2,W_Stage2,_,_ = model(Y, device) # Y now has the size of torch.Size([8, 8, 257, 497]) (viewed as complex)
 
         # W_Stage2 is shape torch.Size([8, 1, 514, 497])
         B,M,F,L = W_Stage2.size()
-        W_Stage2 = W_Stage2.view(B, M, F // 2, 2, L).permute(0, 1, 2, 4, 3).contiguous()
-        W_Stage2= torch.view_as_complex(W_Stage2) # torch.Size([8, 1, 257, 497])
-        # Squeeze the singleton dimension (M = 1) to align with noise_stage1
-        W_Stage2 = W_Stage2.squeeze(1)  # Now W_Stage2 has shape [8, 257, 497]
+
+        # Ilai Z 03/8 - Deleted this
+        # W_Stage2 = W_Stage2.view(B, M, F // 2, 2, L).permute(0, 1, 2, 4, 3).contiguous()
+        # W_Stage2= torch.view_as_complex(W_Stage2) # torch.Size([8, 1, 257, 497])
+        # # Squeeze the singleton dimension (M = 1) to align with noise_stage1
+        # W_Stage2 = W_Stage2.squeeze(1)  # Now W_Stage2 has shape [8, 257, 497]
 
 
         # X_hat_Stage1 is shape of 8,257,497
@@ -78,9 +80,10 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
         x_hat_stage1 = (x_hat_stage1_B_norm.T/max_x).T 
         
         # Perform ISTFT and norm for x_hat
-        x_hat_stage2_B_norm = Postprocessing(X_hat_Stage2,R,win_len,device)
-        max_x = torch.max(abs(x_hat_stage2_B_norm),dim=1).values
-        x_hat_stage2_time=x_hat_stage2_B_norm #(x_hat_stage2_B_norm.T/max_x).T       
+        # IlaiZ 03/08 - Deleted this
+        # x_hat_stage2_B_norm = Postprocessing(X_hat_Stage2,R,win_len,device)
+        # max_x = torch.max(abs(x_hat_stage2_B_norm),dim=1).values
+        # x_hat_stage2_time=x_hat_stage2_B_norm #(x_hat_stage2_B_norm.T/max_x).T       
         
         # Preprocessing & Postprocessing for the labeled signal
         X_stft = Preprocesing(fullLabels_x, win_len, fs, T, R, device) # torch.Size([8, 8, 514, 497])
@@ -90,7 +93,7 @@ def train(model, args, results_path, train_loader, val_loader, optimizer, device
         max_x = torch.max(abs(x),dim=1).values
        # x = (x.T/max_x).T
         X_stft = return_as_complex(X_stft) #torch.Size([8, 8, 257, 497])
-        loss,loss_L1, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white, SNR_output ,si_sdr_loss,cost_minimum_variance_two,loss_W_L1= compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first, fullnoise_second, white_noise, win_len, fs, T, R, device, cfg_loss, args)
+        loss,loss_L1, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white, SNR_output ,si_sdr_loss,cost_minimum_variance_two,loss_W_L1= compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,None, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first, fullnoise_second, white_noise, win_len, fs, T, R, device, cfg_loss, args)
         # Log metrics to wandb
         wandb.log({
             "batch_loss_train": loss.item(),

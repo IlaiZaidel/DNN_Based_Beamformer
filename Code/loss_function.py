@@ -43,7 +43,9 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
     loss_W_L1 = torch.tensor(0.0, device=device)
     # Base loss (e.g., MAE between x and x_hat_stage2)
     #x_hat_stage2_time.shape torch.Size([16, 64000])
-    loss_L1 = Loss(x, x_hat_stage2_time, cfg_loss)* args.Enable_cost_L1 # Value example: 764.1401
+    loss_L1 = torch.tensor(0.0, device=device)
+    if (args.Enable_cost_L1>0):
+        loss_L1 = Loss(x, x_hat_stage2_time, cfg_loss)* args.Enable_cost_L1 # Value example: 764.1401
     total_loss += loss_L1
 
 
@@ -58,13 +60,14 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
 
     # Cost function (beamforming-based regularization)
     if args.EnableCost:
-        WX, _, _ = beamformingOpreation(X_stft, args.mic_ref, W_Stage1)
-        wx = Postprocessing(WX, R, win_len, device)
-        max_wx = torch.max(abs(wx), dim=1).values
-        wx = (wx.T / max_wx).T
+        # WX, _, _ = beamformingOpreation(X_stft, args.mic_ref, W_Stage1)
+        # wx = Postprocessing(WX, R, win_len, device)
+        x_hat_stage1 = Postprocessing(X_hat_Stage1,R,win_len,device) #torch.Size([16, 64000])
+        max_wx = torch.max(abs(x_hat_stage1), dim=1).values
+        wx = (x_hat_stage1.T / max_wx).T
         
-        criterion_L1 = criterionFile.criterionL1
-        cost_wx = criterion_L1(wx.float(), x.float(), cfg_loss.norm) * 10000
+        # criterion_L1 = criterionFile.criterionL1
+        cost_wx = criterion_L2(wx.float(), x.float(), cfg_loss.norm)# * 10000
         total_loss += cost_wx
     
 
@@ -233,9 +236,9 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
     ## SI-SDR
     if args.beta_SISDR> 0:
 
-        x_hat_stage2 = Postprocessing(X_hat_Stage2,R,win_len,device) #torch.Size([16, 64000])
+        x_hat_stage1 = Postprocessing(X_hat_Stage1,R,win_len,device) #torch.Size([16, 64000])
         x_original = Postprocessing(X_stft[:, args.mic_ref,:,:],R,win_len,device) #X_stft.shape is torch.Size([16, 8, 257, 497])
-        si_sdr_loss = si_sdr(x_original,x_hat_stage2)
+        si_sdr_loss = si_sdr(x_original,x_hat_stage1)
 
         total_loss -=si_sdr_loss*args.beta_SISDR
 

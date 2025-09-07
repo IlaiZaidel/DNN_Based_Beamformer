@@ -15,13 +15,13 @@ params:
   mu : 0 #1                      # Weight that helps sum everything to 1: mu/(1+mu) and 1/(1+mu)    #Important
   beta_mv_dir:  0          # Weight of the minimum variance for the directional noise
   beta_mv_white: 0            # Weight of the minimum variance for the white noise
-  Enable_cost_L1: 3000 #200000
+  Enable_cost_L1: 0 #200000
   Enable_cost_L2: 0
-  beta_dr: 1 # 0.00001 # 1/100000  --- Normalizing it to be 1 # "1/(1 - ${params.mu})"   #1                  # Distortionless Response weight                #Important
+  beta_dr: 0 # 0.00001 # 1/100000  --- Normalizing it to be 1 # "1/(1 - ${params.mu})"   #1                  # Distortionless Response weight                #Important
   beta_SIR: 0
-  beta_SISDR: 0 # by 1/2 - Normalizing it to be 2 or 3
+  beta_SISDR: 1 # by 1/2 - Normalizing it to be 2 or 3
   white_only_enable: 0 #1000  
-  two_dir_noise: 10 # 1/100 - Normalizing it to be 1 "${params.mu}/(1 - ${params.mu})"                                                       # Important
+  two_dir_noise: 0 # 1/100 - Normalizing it to be 1 "${params.mu}/(1 - ${params.mu})"                                                       # Important
   weight_L1_regularization: 0
   noise_only_time: 0.5
 modelParams:
@@ -36,7 +36,7 @@ modelParams:
 
 # ============= Device =============
 device:
-  device_num: 2 # Device number # Changed from 0
+  device_num: 3 # Device number # Changed from 0
 
 # ============ Criterion ============
 loss:
@@ -46,8 +46,8 @@ loss:
 # ========== data-sets ==============
 # Define main paths for datasets, models, and special cases
 data_set_path: /dsi/gannot-lab1/datasets/Ilai_data/ # /home/dsi/ilaiz/DNN_Based_Beamformer/Code/processed_data  #/home/dsi/ilaiz/DNN_Based_Beamformer/Code//Dataset/Non-Reverberant Environment/Speaker Switch # Main path of the dataset
-model_path:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/10_06_2025   #'/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/'     # Main path of the model
-folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/10_06_2025 # The main name of the results folder  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/30_12_2024   # 
+model_path:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/02_09_2025   #'/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/'     # Main path of the model
+folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/02_09_2025 # The main name of the results folder  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/30_12_2024   # 
 # For beampattern analysis:
 # Model results:
 #folder_name:  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/ADI_2_noises_25_03
@@ -56,8 +56,8 @@ folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverb
 
 paths: 
   rev_env: False                                  # False -> Non-Reverberant Environment; True->Reverberant Environment
-  train_path:     ${data_set_path}Two_Directional_Noises_Train/      #WhiteNoiseOnly_Train/   #/Train/  #Train/  #Checking          # The path of the training dataset 
-  test_path:      ${data_set_path}Two_Directional_Noises_Test/      #WhiteNoiseOnly_Test/   #/Test_set/             # The path of the testing dataset 
+  train_path:     /dsi/gannot-lab1/datasets/Ilai_data/Tracking_Signal_Gen_Data/Train_Signal_Gen/      #WhiteNoiseOnly_Train/   #/Train/  #Train/  #Checking          # The path of the training dataset 
+  test_path:      /dsi/gannot-lab1/datasets/Ilai_data/Tracking_Signal_Gen_Data/Test_Signal_Gen/      #WhiteNoiseOnly_Test/   #/Test_set/             # The path of the testing dataset 
   results_path:   ${folder_name}/                 # Path to store general results
   modelData_path: ${model_path}/                  # Path to store/load model data
   log_path:       /logs/${folder_name}/           # Path to store logs
@@ -89,5 +89,6 @@ hydra:
 
 # ========== Dataset ==========
 dataset:
-  df_path_train: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters.csv
-  df_path_test: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_test.csv
+  df_path_train: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_train.csv
+  df_path_test: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_test.csv
+  

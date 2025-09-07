@@ -24,13 +24,13 @@ SAMPLE_RATE = 16000
 MIC_REF = 4  # Reference microphone
 
 # Set the feature index (change this to process a different sample)
-INDEX =11 # Modify this value to select a different test sample
+INDEX =6 # Modify this value to select a different test sample
 
 # Paths to required files
-CSV_PATH = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_test.csv"
-STFT_MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/10_06_2025/TEST_STFT_domain_results_10_06_2025__05_37_59_0.mat"
+CSV_PATH = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_test.csv"
+STFT_MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/13_08_2025/TEST_STFT_domain_results_13_08_2025__08_57_58_0.mat"
 
-OUTPUT_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen/10_06_plots"
+OUTPUT_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gen/13_08_plots"
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -53,6 +53,8 @@ def compute_beampattern_amplitudes(W_STFT_timeFixed):
         # Perform STFT
         Y = Preprocesing(feature_vector, WIN_LEN, SAMPLE_RATE, 4, HOP_LEN, DEVICE)
         Y = return_as_complex(Y)
+        # W_STFT_timeFixed = return_as_complex(W_STFT_timeFixed)
+        # Convert 2F→F (real/imag stacked along freq) → complex
 
         # Apply beamforming
         wy = torch.mul(torch.conj(W_STFT_timeFixed), Y)
@@ -146,9 +148,11 @@ if __name__ == "__main__":
     row = df.iloc[INDEX]
     # Load STFT Mat file
     data_stft = scipy.io.loadmat(STFT_MAT_FILE)
-    W_STFT_timeFixed = torch.tensor(data_stft["W_STFT_timeFixed"][INDEX%16]).unsqueeze(0).to(DEVICE)
-
-
+    W_STFT_timeChange = torch.tensor(data_stft["W_STFT_timeChange"][INDEX%16]).unsqueeze(0).to(DEVICE)
+    W_STFT_timeFixed = W_STFT_timeChange[:,:,:, 300]
+    W_STFT_timeFixed = W_STFT_timeFixed.unsqueeze(-1)
+    real, imag = torch.split(W_STFT_timeFixed, 257, dim=2)
+    W_STFT_timeFixed = torch.complex(real, imag)  # [B, M, 257, L]
     angle_x = float(row["angle_x"])
     angle_n1 = float(row["angle_n1"])
     angle_n2 = float(row["angle_n2"])

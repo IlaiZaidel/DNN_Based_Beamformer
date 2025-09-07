@@ -173,3 +173,7 @@ cython_debug/
 *wav
 *.jpg
 *.pt
+*csv
+**outputs*
+**signal_generator/*
+**signal_generator_gpu/*
