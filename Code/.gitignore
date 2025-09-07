@@ -173,3 +173,4 @@ cython_debug/
 *wav
 *.jpg
 *.pt
+*csv
