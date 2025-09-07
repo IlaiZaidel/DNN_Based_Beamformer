@@ -92,8 +92,12 @@ def beamformingOpreation(Y, mic_ref, W=0):
         W     (torch.Tensor or int): Updated beamforming weights. 
     """
     B, M, F, L = Y.size()        # Y = B,M,F,L = B,8,514,497
-    Y = Y.view(B, M, F // 2, 2, L).permute(0,1,2,4,3).contiguous() #  Y = B,M,F//2,L,2 = B,8,257,497,2
-    Y = torch.view_as_complex(Y) # Y = B,M,F//2,L = B,8,257,497
+        # Convert to complex if not already
+    if not Y.is_complex():
+        Y = Y.view(B, M, F // 2, 2, L).permute(0, 1, 2, 4, 3).contiguous()  # B,M,257,497,2
+        Y = torch.view_as_complex(Y)  # B,M,257,497
+    # Y = Y.view(B, M, F // 2, 2, L).permute(0,1,2,4,3).contiguous() #  Y = B,M,F//2,L,2 = B,8,257,497,2
+    # Y = torch.view_as_complex(Y) # Y = B,M,F//2,L = B,8,257,497
 
     # If we got no input weights, we will take the y recorded at the reference microphone by 
     # setting W as 1 in the reference channel and 0 for the other channels.

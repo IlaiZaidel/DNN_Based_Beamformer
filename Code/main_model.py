@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.utils
 from torch.utils.data import DataLoader
 #from sklearn.model_selection import train_test_split
-from generate_dataset import GeneretedInputOutput,GeneretedData
+from generate_dataset import GeneratedDataTrackingFromClean
 import hydra
 import os
 from datetime import datetime
@@ -43,13 +43,12 @@ def main(cfg: CUNETConfig):
     if cfg.SavedModel == 0: # If train the model 
         # Load Data (Train & Val)
         train_path = cfg.paths.train_path
-        train_data=GeneretedData(cfg, mode='train')
+        train_data = GeneratedDataTrackingFromClean(cfg, mode='train')
         # Create train & validation set 
         # train_set, val_set = train_test_split(train_data,train_size = cfg.model_hp.train_size_spilt,test_size = cfg.model_hp.val_size_spilt)  
         train_set, val_set = torch.utils.data.random_split(train_data,[cfg.model_hp.train_size_spilt, cfg.model_hp.val_size_spilt])  
         train_loader = DataLoader(train_set, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.data_loader_shuffle,num_workers=16)
         val_loader = DataLoader(val_set, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.data_loader_shuffle,num_workers=16)
-    
         # Defining the model
         model = ExNetBFPF(cfg.modelParams)  #  #ExNetBFPF(cfg.modelParams)   #loadPreTrainedModel(cfg)#
     else: # If to load saved weights
@@ -74,7 +73,7 @@ def main(cfg: CUNETConfig):
         train_loss = []
         val_loss = []
 
-        writer = SummaryWriter(log_dir = cfg.paths.log_path)
+        # writer = SummaryWriter(log_dir = cfg.paths.log_path)
 
         for epoch in tqdm(range(cfg.model_hp.epochs)):
             epoch_train_loss,epoch_val_loss = train(model, cfg.params, cfg.paths.results_path, train_loader, val_loader, optimizer, device, cfg.loss, cfg.debug) 
@@ -91,9 +90,9 @@ def main(cfg: CUNETConfig):
 
 
 
-            # Saved results in log file (TensorBorad)
-            writer.add_scalar("Loss/train",epoch_train_loss / len(train_loader),epoch)
-            writer.add_scalar("Loss/val",epoch_val_loss / len(val_loader),epoch)
+            # # Saved results in log file (TensorBorad)
+            # writer.add_scalar("Loss/train",epoch_train_loss / len(train_loader),epoch)
+            # writer.add_scalar("Loss/val",epoch_val_loss / len(val_loader),epoch)
 
             # Keeps the weights obtained at the end of the training        
             os.makedirs(cfg.paths.modelData_path, mode=0o777, exist_ok=True)
@@ -111,13 +110,13 @@ def main(cfg: CUNETConfig):
             )
         })
 
-        writer.flush()
-        writer.close()
+        # writer.flush()
+        # writer.close()
           
     # Test - Data Loader
     # test_path = cfg.paths.test_path
     # test_data = GeneretedInputOutput(test_path,cfg.params.mic_ref)
-    test_data = GeneretedData(cfg, mode='test')
+    test_data =  GeneratedDataTrackingFromClean(cfg, mode='test')
     test_loader = DataLoader(test_data, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.test_loader_shuffle)
     
     # Testing
