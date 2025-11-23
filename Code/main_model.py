@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.utils
 from torch.utils.data import DataLoader
 #from sklearn.model_selection import train_test_split
-from generate_dataset import GeneratedDataTrackingFromClean
+from generate_dataset import GeneratedDataTrackingFromClean,  GeneratedDataTrackingFromCleanBabbleNoise, GeneretedDataTracking_Signal_Generator, GeneratedDataTrackingFromCleanPinkNoise
 import hydra
 import os
 from datetime import datetime
@@ -43,14 +43,14 @@ def main(cfg: CUNETConfig):
     if cfg.SavedModel == 0: # If train the model 
         # Load Data (Train & Val)
         train_path = cfg.paths.train_path
-        train_data = GeneratedDataTrackingFromClean(cfg, mode='train')
+        train_data = GeneratedDataTrackingFromCleanBabbleNoise(cfg, mode='train')
         # Create train & validation set 
         # train_set, val_set = train_test_split(train_data,train_size = cfg.model_hp.train_size_spilt,test_size = cfg.model_hp.val_size_spilt)  
         train_set, val_set = torch.utils.data.random_split(train_data,[cfg.model_hp.train_size_spilt, cfg.model_hp.val_size_spilt])  
         train_loader = DataLoader(train_set, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.data_loader_shuffle,num_workers=16)
         val_loader = DataLoader(val_set, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.data_loader_shuffle,num_workers=16)
         # Defining the model
-        model = ExNetBFPF(cfg.modelParams)  #  #ExNetBFPF(cfg.modelParams)   #loadPreTrainedModel(cfg)#
+        model =  ExNetBFPF(cfg.modelParams) # ExNetBFPF(cfg.modelParams)  #  #ExNetBFPF(cfg.modelParams)   #loadPreTrainedModel(cfg)#
     else: # If to load saved weights
         model = loadPreTrainedModel(cfg)
 
@@ -116,7 +116,7 @@ def main(cfg: CUNETConfig):
     # Test - Data Loader
     # test_path = cfg.paths.test_path
     # test_data = GeneretedInputOutput(test_path,cfg.params.mic_ref)
-    test_data =  GeneratedDataTrackingFromClean(cfg, mode='test')
+    test_data =  GeneratedDataTrackingFromCleanBabbleNoise(cfg, mode='test')
     test_loader = DataLoader(test_data, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.test_loader_shuffle)
     
     # Testing

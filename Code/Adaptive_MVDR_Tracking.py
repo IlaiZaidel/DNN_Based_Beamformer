@@ -206,7 +206,7 @@ speech_hat =  Postprocessing(Y_bf,R,win_length,device) #torch.Size([1, 64000])
 
 
 save_vector_as_wav(y[:,mic_ref], output_wav_path='mvdr_noisy_signal.wav', sample_rate=16000)
-save_vector_as_wav(speech_hat, output_wav_path='mvdr_output.wav', sample_rate=16000)
+save_vector_as_wav(speech_hat, output_wav_path='mvdr_output_beta_0.8.wav', sample_rate=16000)
 
 
 
@@ -261,4 +261,4 @@ Y_bf_tracking = torch.sum(W_mvdr_padded.conj() * Y_stft, dim=2)  # (B, F, T)
 speech_hat_tracking = Postprocessing(Y_bf_tracking, R, win_length, device)  # (B, time)
 
 # Example save
-save_vector_as_wav(speech_hat_tracking, output_wav_path='mvdr_tracking_output.wav', sample_rate=fs)
+save_vector_as_wav(speech_hat_tracking, output_wav_path='mvdr_tracking_output_beta_0.995.wav', sample_rate=fs)

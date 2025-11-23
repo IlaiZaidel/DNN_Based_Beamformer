@@ -1,83 +1,60 @@
+import os
 import scipy.io as sio
 from datetime import datetime
-import os
 
-def saveResults(Y,X,skip_Stage1,skip_Stage2,W,W_timeChange,W_Stage2,X_hat_Stage1,X_hat_Stage2,
-                y,x_hat_stage1,x_hat_stage2,results_path,i,fs):
-          
-    # Create the directory to save results if it doesn't exist
+
+def saveResults(Y, X_stft,
+                W_Stage1_left, W_Stage1_right,
+                X_hat_Stage1_C_left, X_hat_Stage1_C_right,
+                y, x_hat_stage1_left, x_hat_stage1_right,
+                results_path, i, fs):
+    """
+    Save STFT-domain and time-domain results as .mat files.
+    Compatible with Ilai's DNN Beamformer project output format.
+    """
+
+    # Ensure directory exists
     os.makedirs(results_path, mode=0o777, exist_ok=True)
-    
-    # Get the current timestamp
-    now = (datetime.now()).strftime("%d_%m_%Y__%H_%M_%S")
+
+    # Timestamp
+    now = datetime.now().strftime("%d_%m_%Y__%H_%M_%S")
 
     ####### Save STFT Domain #######
-    # Save Y
-    Y_STFT = (Y).cpu()                       # Convert tensor to CPU
-    Y_STFT = (Y_STFT).detach().numpy()       # Convert tensor to numpy array
-    # Save X 
-    X_STFT = (X).cpu()
-    X_STFT = (X_STFT).detach().numpy()
-    # Save skip connection of stage 1 
-    skip_Stage1 = (skip_Stage1).cpu()
-    skip_Stage1 = (skip_Stage1).detach().numpy()
-    # save skip connection of stage 2
-    # skip_Stage2 = (skip_Stage2).cpu()
-    # skip_Stage2 = (skip_Stage2).detach().numpy()
-    # Save W timeFixed 
-    W_STFT_timeFixed = (W).cpu()
-    W_STFT_timeFixed = (W_STFT_timeFixed).detach().numpy()
-    # Save W timeChange 
-    W_STFT_timeChange = (W_timeChange).cpu()
-    W_STFT_timeChange = (W_STFT_timeChange).detach().numpy()
-    # save W of stage 2
-    W_Stage2 = (W_Stage2).cpu()
-    W_Stage2 = (W_Stage2).detach().numpy()
-    # save X_hat stage1 
-    X_hat_Stage1 = (X_hat_Stage1).cpu()
-    X_hat_Stage1 = (X_hat_Stage1).detach().numpy()
-    # save X_hat stage2
-    X_hat_Stage2 = (X_hat_Stage2).cpu()
-    X_hat_Stage2 = (X_hat_Stage2).detach().numpy()
+    Y_STFT = Y.cpu().detach().numpy()
+    X_STFT = X_stft.cpu().detach().numpy()
 
-    # Define the file path and name for STFT domain results
-    filename = results_path + 'TEST_STFT_domain_results_' + now + '_' + str(i) + '.mat'
+    W_Stage1_left_np  = W_Stage1_left.cpu().detach().numpy()
+    W_Stage1_right_np = W_Stage1_right.cpu().detach().numpy()
 
-    # Create a dictionary with the variable names and their corresponding values
-    mdic = {
+    X_hat_Stage1_C_left_np  = X_hat_Stage1_C_left.cpu().detach().numpy()
+    X_hat_Stage1_C_right_np = X_hat_Stage1_C_right.cpu().detach().numpy()
+
+    stft_filename = os.path.join(results_path, f"TEST_STFT_domain_results_{now}_{i}.mat")
+    stft_dict = {
         "Y_STFT": Y_STFT,
         "X_STFT": X_STFT,
-        "W_STFT_timeChange": W_STFT_timeChange,
-        "W_STFT_timeFixed": W_STFT_timeFixed,
-        "W_Stage2": W_Stage2,
-        "X_hat_Stage1": X_hat_Stage1,
-        "X_hat_Stage2": X_hat_Stage2,
-        "skip_Stage1": skip_Stage1,
-        # "skip_Stage2": skip_Stage2
+        "W_Stage1_left": W_Stage1_left_np,
+        "W_Stage1_right": W_Stage1_right_np,
+        "X_hat_Stage1_C_left": X_hat_Stage1_C_left_np,
+        "X_hat_Stage1_C_right": X_hat_Stage1_C_right_np,
+        "fs": fs,
+        "index": i,
+        "timestamp_str": now,
     }
-
-    # Save the dictionary as .mat file
-    sio.savemat(filename, mdic)
-    #################################
+    sio.savemat(stft_filename, stft_dict)
 
     ####### Save Time Domain #######
-    # Save y
-    y = y.cpu()   # Convert tensor to CPU
-    # Save x_hat stage1
-    x_hat_stage1 = x_hat_stage1.cpu()
-    # Save x_hat stage2
-    x_hat_stage2 = x_hat_stage2.cpu()
+    y_np                  = y.cpu().detach().numpy()
+    x_hat_stage1_left_np  = x_hat_stage1_left.cpu().detach().numpy()
+    x_hat_stage1_right_np = x_hat_stage1_right.cpu().detach().numpy()
 
-    # Define the file path and name for time domain results
-    filename = results_path + 'TEST_time_domain_results_' + now + '_' + str(i) + '.mat'
-
-    # Create a dictionary with the variable names and their corresponding values
-    mdic = {
-        "y": y.numpy(),
-        "x_hat_stage1": x_hat_stage1.numpy(),
-        "x_hat_stage2": x_hat_stage2.numpy()
+    time_filename = os.path.join(results_path, f"TEST_time_domain_results_{now}_{i}.mat")
+    time_dict = {
+        "y": y_np,
+        "x_hat_stage1_left": x_hat_stage1_left_np,
+        "x_hat_stage1_right": x_hat_stage1_right_np,
+        "fs": fs,
+        "index": i,
+        "timestamp_str": now,
     }
-    
-    # Save the dictionary as .mat file
-    sio.savemat(filename, mdic)
-
+    sio.savemat(time_filename, time_dict)

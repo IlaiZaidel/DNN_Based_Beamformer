@@ -177,3 +177,6 @@ cython_debug/
 **outputs*
 **signal_generator/*
 **signal_generator_gpu/*
+
+# Video files
+*.mp4

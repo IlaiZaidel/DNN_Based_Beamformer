@@ -9,9 +9,10 @@ import soundfile as sf
 import scipy.signal as signal
 import torch
 import scipy
+import glob, random
 # ----------------------- EDIT ME -----------------------
 SPEECH_WAV   = "/dsi/gannot-lab1/datasets/LibriSpeech/LibriSpeech/Test/5105/28241/5105-28241-0011.wav"
-MODEL_PATH   = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/19_08_2025/trained_model_dataset_withoutRev.pt"
+MODEL_PATH   = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/24_09_2025/trained_model_dataset_withoutRev.pt"
 OUT_DIR      = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Beampattern_and_model_analysis"
 # ---- Make unique subfolder for this run ----
 stamp = time.strftime("%Y%m%d_%H%M%S")
@@ -217,11 +218,25 @@ d = np.vstack([np.zeros((nlead, MICS), dtype=np.float64), d_full[:keep, :]])
 # ---- 5) Colored noises (AR(1) -> per-mic filtering with noise RIRs) ----
 w = np.random.randn(N, 2)
 AR = [1.0, -0.7]  # low-pass-ish
-drv1 = signal.lfilter([1.0], AR, w[:, 0])
-drv2 = signal.lfilter([1.0], AR, w[:, 1])
+x1 = signal.lfilter([1.0], AR, w[:, 0])
+x2 = signal.lfilter([1.0], AR, w[:, 1])
 
-n1 = np.stack([signal.lfilter(h_n1[m], [1.0], drv1) for m in range(MICS)], axis=1)
-n2 = np.stack([signal.lfilter(h_n2[m], [1.0], drv2) for m in range(MICS)], axis=1)
+
+
+# ---- 5) Colored noises (AR(1) -> per-mic filtering with noise RIRs) ----
+noise_dir = "/dsi/gannot-lab1/datasets/whamr/wav16k/min/tt/noise"
+noise_wavs = sorted(glob.glob(os.path.join(noise_dir, "*.wav")))
+
+p1 = random.choice(noise_wavs); x1, sr1 = sf.read(p1, always_2d=False)
+p2 = random.choice(noise_wavs); x2, sr2 = sf.read(p2, always_2d=False)
+
+if len(x1) < N: x1 = np.tile(x1, int(np.ceil(N/len(x1))))
+if len(x2) < N: x2 = np.tile(x2, int(np.ceil(N/len(x2))))
+x1 = np.asarray(x1[-N:], dtype=np.float64)
+x2 = np.asarray(x2[-N:], dtype=np.float64)
+
+n1 = np.stack([signal.lfilter(h_n1[m], [1.0], x1) for m in range(MICS)], axis=1)
+n2 = np.stack([signal.lfilter(h_n2[m], [1.0], x2) for m in range(MICS)], axis=1)
 
 # ---- 6) SNR scaling vs clean @ ref mic ----
 ref = MIC_REF_1B - 1
@@ -252,79 +267,143 @@ n1 /= peak
 n2 /= peak
 v  /= peak
 
-# ---- 8) Run the model (assumes torch.save(model, path)) ----
+# ---- 8) Run the model (stereo-aware) ----
 device = torch.device(f"cuda:{cfg.device.device_num}" if torch.cuda.is_available() else "cpu")
-
-# Load the model directly onto that device
 from LoadPreTrainedModel import loadPreTrainedModel
 
-device = torch.device(f"cuda:{cfg.device.device_num}" if torch.cuda.is_available() else "cpu")
+model = loadPreTrainedModel(cfg).to(device).eval()
 
-# Load model using your existing loader
-model = loadPreTrainedModel(cfg)
+# Helper: safe mic index (accepts 0- or 1-based)
+def _mic_idx(idx_like, M):
+    idx = int(idx_like)
+    if 1 <= idx <= M:  # likely 1-based in config
+        return idx - 1
+    # assume already 0-based if not in [1..M]
+    if not (0 <= idx < M):
+        raise ValueError(f"Bad mic index {idx_like} for {M}-mic array")
+    return idx
 
-# Ensure parameters are on the correct device
-model.to(device).eval()
-# preprocessing to STFT (your utils)
+# Read stereo refs from your modelParams
+micL = _mic_idx(cfg.modelParams.mic_ref_left,  MICS)
+micR = _mic_idx(cfg.modelParams.mic_ref_right, MICS)
+
+# Preprocessing to STFT (B=1)
 y_t = torch.from_numpy(y[None, ...]).float().to(device)        # (1, N, M)
-Y   = Preprocesing(y_t, WIN_LENGTH, FS, T_SEC, HOP, device)    # (B, M, 2F, L)
+Y   = Preprocesing(y_t, WIN_LENGTH, FS, T_SEC, HOP, device)    # (1, M, 2F, L)
 
 with torch.no_grad():
-    # your model’s forward signature:
-    # W_timeChange, X_hat_Stage1, Y_out, W_Stage1, X_hat_Stage2, W_Stage2, _, _
-    outs = model(Y, device)
-    X_hat_Stage1 = outs[1]
-   
+    # Model forward (per your ExNetBFPF.forward signature)
+    # returns: W_Stage1_left, W_Stage1_right, X_hat_Stage1_C_left, X_hat_Stage1_C_right, Y_out
+    W_left, W_right, XhatC_left, XhatC_right, Y_out = model(Y, device)
 
-xhat1 = Postprocessing(X_hat_Stage1, HOP, WIN_LENGTH, device).cpu().numpy()[0]  # (N,)
+# ISTFT both heads -> time-domain mono
+xhat_left  = Postprocessing(XhatC_left,  HOP, WIN_LENGTH, device).cpu().numpy()[0]   # (N,)
+xhat_right = Postprocessing(XhatC_right, HOP, WIN_LENGTH, device).cpu().numpy()[0]   # (N,)
 
+# ---- 9) Build stereo signals & save WAVs ----
+def make_stereo_from_mics(arr_2d, li, ri):
+    """
+    arr_2d: shape (N, M) for multichannel signals.
+    li/ri:  left/right mic indices (0-based).
+    """
+    return np.stack([arr_2d[:, li], arr_2d[:, ri]], axis=-1).astype(np.float32)
 
-def to_stereo(arr):
-    # If multichannel (N, M) with M>=2 -> [first, last] channels
-    if arr.ndim == 2 and arr.shape[1] >= 2:
-        return np.stack([arr[:, 0], arr[:, -1]], axis=-1).astype(np.float32)
-    # If already mono (N,) or (N,1), return as-is
-    return arr.astype(np.float32)
+def make_stereo_from_estimates(left_1d, right_1d):
+    return np.stack([left_1d.astype(np.float32), right_1d.astype(np.float32)], axis=-1)
 
-# ---- 9) Save WAVs ----
+def normalize_safe(stereo, peak=0.999):
+    m = np.max(np.abs(stereo))
+    if m > 1e-12:
+        stereo = (stereo / m) * peak
+    return stereo.astype(np.float32)
+
 stamp = time.strftime("%Y%m%d_%H%M%S")
 base = os.path.join(RUN_DIR, "ex")
 
-
-# multichannel -> stereo (first & last); mono stays mono
-sf.write(base + "_mix.wav",   to_stereo(y),  FS)
-sf.write(base + "_clean.wav", to_stereo(d),  FS)
-sf.write(base + "_n1.wav",    to_stereo(n1), FS)
+# Build stereo for mixture & components using the chosen mic refs
+mix_stereo   = make_stereo_from_mics(y,  micL, micR)
+clean_stereo = make_stereo_from_mics(d,  micL, micR)
+n1_stereo    = make_stereo_from_mics(n1, micL, micR)
+white_stereo = make_stereo_from_mics(v,  micL, micR)
 if USE_TWO_NOISES:
-    sf.write(base + "_n2.wav", to_stereo(n2), FS)
-sf.write(base + "_white.wav", to_stereo(v),  FS)
+    n2_stereo = make_stereo_from_mics(n2, micL, micR)
 
-# model outputs (mono already)
-sf.write(base + "_xhat1.wav", xhat1.astype(np.float32), FS)
+# Model output stereo
+xhat_stereo = make_stereo_from_estimates(xhat_left, xhat_right)
 
-print("Saved to:", OUT_DIR)
-print("Files prefix:", base)
+# Optional: normalize each file independently to prevent clipping
+mix_stereo   = normalize_safe(mix_stereo)
+clean_stereo = normalize_safe(clean_stereo)
+n1_stereo    = normalize_safe(n1_stereo)
+white_stereo = normalize_safe(white_stereo)
+if USE_TWO_NOISES:
+    n2_stereo = normalize_safe(n2_stereo)
+xhat_stereo  = normalize_safe(xhat_stereo)
 
-# ---- Stage-1 weights only (outs[3]) -> complex -> pick a single time frame ----
-W1 = outs[3]  # shape [B, M, 2F, L]
+# Save
+sf.write(base + "_mix_stereo.wav",   mix_stereo,   FS)
+sf.write(base + "_clean_stereo.wav", clean_stereo, FS)
+sf.write(base + "_n1_stereo.wav",    n1_stereo,    FS)
+if USE_TWO_NOISES:
+    sf.write(base + "_n2_stereo.wav", n2_stereo,   FS)
+sf.write(base + "_white_stereo.wav", white_stereo, FS)
 
-# convert stacked real/imag (2F) to complex [B, M, F, L]
-B, M, F2, L = W1.shape
-F = F2 // 2
-# real, imag = torch.split(W1, F, dim=2)
-W1c =W1 # [B, M, F, L]
+sf.write(base + "_xhat_stage1_stereo.wav", xhat_stereo, FS)
 
-# choose a valid frame
-frame = min(FRAME_IDX, L - 1)
-W1c_frame = W1c[:, :, :, frame:frame+1]  # [B, M, F, 1]
+print("Saved stereo WAVs to:", RUN_DIR)
+print("Left/Right mics used:", micL, micR)
 
-# compute beampatterns
-ampl_sq_db, ampl_spec_db = compute_beampattern_amplitudes(
-    W_time_fixed_complex=W1c_frame,
+
+# ---- 10) Beampatterns for LEFT and RIGHT ----
+def to_complex_W(W_stacked):
+    """
+    Convert W from stacked real/imag on freq dim (2F) -> complex (F).
+    Input:  W_stacked: [B, M, 2F, L]  (float)
+    Return: W_complex: [B, M,  F, L]  (complex)
+    """
+    B, M, F2, Lw = W_stacked.shape
+    assert F2 % 2 == 0, f"Expected even 2F, got {F2}"
+    F = F2 // 2
+    real, imag = torch.split(W_stacked, F, dim=2)
+    return torch.complex(real, imag)
+
+# Make complex weights
+W_left_c  = W_left    # [B, M, F, L]
+W_right_c = W_right   # [B, M, F, L]
+
+# Choose analysis frame safely
+B, M, F, Lw = W_left_c.shape
+frame = min(max(0, FRAME_IDX), Lw - 1)
+
+# Select a single frame and keep a time axis of length 1
+W_left_frame  = W_left_c[:, :, :, frame:frame+1]   # [B, M, F, 1]
+W_right_frame = W_right_c[:, :, :, frame:frame+1]  # [B, M, F, 1]
+
+# If second noise is disabled, don't annotate it
+angle_n2_plot = angle_n2 if USE_TWO_NOISES else None
+
+# Compute beampattern power vs DOA & spectrogram (LEFT)
+ampl_sq_db_L, ampl_spec_db_L = compute_beampattern_amplitudes(
+    W_time_fixed_complex=W_left_frame,
     device=device, win_len=WIN_LENGTH, fs=FS, T_sec=T_SEC, hop=HOP, mic_dim=1
 )
-if not USE_TWO_NOISES:
-    angle_n2 = None
-# annotate with your randomized angles from above
-plot_beampattern(ampl_sq_db, RUN_DIR, angle_x=angle_src, angle_n1=angle_n1, angle_n2=angle_n2, tag=f"frame{frame}")
-plot_beam_spectrogram(ampl_spec_db, FS, RUN_DIR, angle_x=angle_src, angle_n1=angle_n1, angle_n2=angle_n2, tag=f"frame{frame}")
+plot_beampattern(ampl_sq_db_L, RUN_DIR,
+                 angle_x=angle_src, angle_n1=angle_n1, angle_n2=angle_n2_plot,
+                 tag=f"left_frame{frame}")
+plot_beam_spectrogram(ampl_spec_db_L, FS, RUN_DIR,
+                      angle_x=angle_src, angle_n1=angle_n1, angle_n2=angle_n2_plot,
+                      tag=f"left_frame{frame}")
+
+# Compute beampattern power vs DOA & spectrogram (RIGHT)
+ampl_sq_db_R, ampl_spec_db_R = compute_beampattern_amplitudes(
+    W_time_fixed_complex=W_right_frame,
+    device=device, win_len=WIN_LENGTH, fs=FS, T_sec=T_SEC, hop=HOP, mic_dim=1
+)
+plot_beampattern(ampl_sq_db_R, RUN_DIR,
+                 angle_x=angle_src, angle_n1=angle_n1, angle_n2=angle_n2_plot,
+                 tag=f"right_frame{frame}")
+plot_beam_spectrogram(ampl_spec_db_R, FS, RUN_DIR,
+                      angle_x=angle_src, angle_n1=angle_n1, angle_n2=angle_n2_plot,
+                      tag=f"right_frame{frame}")
+
+print(f"Saved LEFT/RIGHT beampatterns for frame {frame} into: {RUN_DIR}")

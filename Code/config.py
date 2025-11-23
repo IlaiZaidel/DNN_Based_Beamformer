@@ -43,6 +43,7 @@ class ModelParams:
     channelsStage1: int      # Number of input channels for stage1  
     channelsStage2: int      # Number of input channels for stage2
     numFeatures: int         # Number of features (number of frames) at the end of stage1
+    USE_TRUE_RIRS: int
 
 @dataclass
 class Device:
