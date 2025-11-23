@@ -5,7 +5,8 @@ import numpy as np
 
 from RTF_covariance_whitening import covariance_whitening, fix_covariance_whitening, noise_estimation
 @torch.no_grad()
-def pastd_rank1_whitened(Y, noise_time_only, beta=0.995):
+
+def pastd_rank1_whitened(Y, noise_time_only, beta=0.95):
     """
     Run rank-1 PASTd on each time frame (after whitening) for each batch and frequency bin.
 
@@ -23,7 +24,7 @@ def pastd_rank1_whitened(Y, noise_time_only, beta=0.995):
     Ln = int(noise_time_only * fs // hop_size)
     Rnn = noise_estimation(Y,  Ln) #torch.Size([16, 514, 8, 8])
     I = torch.eye(M, dtype=Rnn.dtype, device=Rnn.device).expand_as(Rnn)
-    Rnn = Rnn + 1e-3 * I  # Diagonal loading
+    Rnn = Rnn + 1e-6 * I  # Diagonal loading
     T = L - Ln
     device = Y.device
     dtype = Y.dtype
@@ -69,7 +70,7 @@ def pastd_rank1_whitened(Y, noise_time_only, beta=0.995):
     return W, eigvals, eigvecs  # shape: (B, F, M, T)
 
 
-def rtf_from_subspace_tracking(W, eigvals, eigvecs,noise_only_time, mic_ref=4):
+def rtf_from_subspace_tracking(W, eigvals, eigvecs,noise_only_time, mic_ref):
     
     # Make sure eigvals are float32 BEFORE turning complex
     eigvals = eigvals.to(torch.float32)  # 
@@ -80,5 +81,8 @@ def rtf_from_subspace_tracking(W, eigvals, eigvecs,noise_only_time, mic_ref=4):
     Rnn12 = eigvecs @ torch.diag_embed(sqrt_vals) @ eigvecs.conj().transpose(-2, -1)  # complex64
 
     a_hat = torch.einsum('bfmn,bfnt->bfmt', Rnn12, W)  # now both operands are complex64
-    a_hat = a_hat / a_hat[:, :, mic_ref - 1, :].unsqueeze(-2)  # torch.Size([8, 257, 8, 435])
+    a_hat = a_hat / a_hat[:, :, mic_ref, :].unsqueeze(-2)  # torch.Size([8, 257, 8, 435])
     return a_hat
+
+
+

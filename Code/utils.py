@@ -273,3 +273,50 @@ def place_source_2d(azimuth_deg, distance, mic_center):
     y = distance * np.sin(az)
     z = 0  # default elevation
     return [mic_center[0] + x, mic_center[1] + y, mic_center[2] + z]
+
+
+import scipy.signal as sg
+# ====================== HELPERS ======================
+def true_rtf_from_all_rirs(all_rirs, win_len, ref_mic, window="hamming", eps=1e-12):
+    """
+    all_rirs: (M, L, K)  with L=#frames, K=RIR length
+    Returns A_true: (M, F=win_len, L) complex (full, two-sided FFT)
+    """
+    M, L, K = all_rirs.shape
+    F = win_len
+    w = sg.get_window(window, win_len, fftbins=True).astype(np.float32)
+    A_true = np.zeros((M, F, L), dtype=np.complex64)
+    for li in range(L):
+        h_mk = all_rirs[:, li, :]
+        if K >= win_len:
+            h_seg = h_mk[:, :win_len].copy()
+        else:
+            h_seg = np.pad(h_mk, ((0, 0), (0, win_len - K)), mode="constant")
+        # h_seg *= w[None, :]
+        H_mf = np.fft.fft(h_seg, n=win_len, axis=1)  # (M, F), full spectrum
+        denom = H_mf[ref_mic, :] + eps
+        A_true[:, :, li] = (H_mf / denom[None, :]).astype(np.complex64)
+    return A_true  # (M, win_len, L)
+
+
+def true_rtf_from_all_rirs_batch(all_rirs, win_len, ref_mic, window="hamming", eps=1e-12):
+    """
+    all_rirs: (B, M, L, K) tensor (any device)
+    Returns: (B, M, F, L) complex tensor
+    """
+    B, M, L, K = all_rirs.shape
+    if K >= win_len:
+        h_seg = all_rirs[..., :win_len]
+    else:
+        pad = (0, win_len - K)
+        h_seg = torch.nn.functional.pad(all_rirs, pad)
+
+    # if window:
+    #     w = torch.hamming_window(win_len, periodic=True, device=all_rirs.device)
+    #     h_seg = h_seg * w
+
+    H = torch.fft.fft(h_seg, n=win_len, dim=-1)
+    denom = H[:, ref_mic, :, :] + eps
+    H_norm = H / denom[:, None, :, :]
+
+    return H_norm.permute(0, 1, 3, 2).to(torch.complex64)

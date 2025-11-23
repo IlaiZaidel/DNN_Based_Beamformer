@@ -9,7 +9,7 @@ from torch import tensor
 from torchmetrics.audio import ScaleInvariantSignalDistortionRatio
 
 
-def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_Stage1, W_Stage2, fullLabels_x, fullnoise_first, fullnoise_second,white_noise, win_len, fs, T, R, device, cfg_loss, args):
+def compute_loss(x, X_stft, Y, X_hat_Stage1_left, W_Stage1_left, X_hat_Stage1_right, W_Stage1_right, fullLabels_x, fullnoise_first, fullnoise_second,white_noise, win_len, fs, T, R, device, cfg_loss, args):
     """
     Compute the loss for the given inputs based on the provided arguments.
 
@@ -17,7 +17,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
         x: Labeled target signal in the time domain (normalized).
         X_stft: STFT of the labeled target signal.
         Y: Noisy signal in the STFT domain.
-        W_Stage1: Beamformer weights from stage 1.
+        W_Stage1_left: Beamformer weights from stage 1.
         W_Stage2: Beamformer weights from stage 2.
         fullLabels_x: Target signal in the time domain (batch, time, channels).
         fullnoise: Directional noise signal in the time domain (batch, time, channels).
@@ -41,11 +41,15 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
     si_sdr_loss =torch.tensor(0.0, device=device)
     cost_minimum_variance_two = torch.tensor(0.0, device=device)
     loss_W_L1 = torch.tensor(0.0, device=device)
+    si_sdr_loss_left= torch.tensor(0.0, device=device)
+    si_sdr_loss_right= torch.tensor(0.0, device=device)
+    loss_L2_stft_left  = torch.tensor(0.0, device=device)
+    loss_L2_stft_right = torch.tensor(0.0, device=device)
     # Base loss (e.g., MAE between x and x_hat_stage2)
     #x_hat_stage2_time.shape torch.Size([16, 64000])
     loss_L1 = torch.tensor(0.0, device=device)
-    if (args.Enable_cost_L1>0):
-        loss_L1 = Loss(x, x_hat_stage2_time, cfg_loss)* args.Enable_cost_L1 # Value example: 764.1401
+    # if (args.Enable_cost_L1>0):
+    #     loss_L1 = Loss(x, x_hat_stage2_time, cfg_loss)* args.Enable_cost_L1 # Value example: 764.1401
     total_loss += loss_L1
 
 
@@ -60,11 +64,11 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
 
     # Cost function (beamforming-based regularization)
     if args.EnableCost:
-        # WX, _, _ = beamformingOpreation(X_stft, args.mic_ref, W_Stage1)
+        # WX, _, _ = beamformingOpreation(X_stft, args.mic_ref, W_Stage1_left)
         # wx = Postprocessing(WX, R, win_len, device)
-        x_hat_stage1 = Postprocessing(X_hat_Stage1,R,win_len,device) #torch.Size([16, 64000])
-        max_wx = torch.max(abs(x_hat_stage1), dim=1).values
-        wx = (x_hat_stage1.T / max_wx).T
+        X_hat_Stage1_left = Postprocessing(X_hat_Stage1_left,R,win_len,device) #torch.Size([16, 64000])
+        max_wx = torch.max(abs(X_hat_Stage1_left), dim=1).values
+        wx = (X_hat_Stage1_left.T / max_wx).T
         
         # criterion_L1 = criterionFile.criterionL1
         cost_wx = criterion_L2(wx.float(), x.float(), cfg_loss.norm)# * 10000
@@ -84,7 +88,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
         a = RTF_from_clean_speech(X_stft)
         a = fix_covariance_whitening(a)  # Output: B, M, F, L
 
-        wa = torch.mul(torch.conj(W_Stage1), a)
+        wa = torch.mul(torch.conj(W_Stage1_left), a)
         wa = torch.sum(wa, dim=1).squeeze(-1) # torch.Size([8, 257, 1])
         #wa_stage2 = torch.mul(torch.conj(W_Stage2), wa) # torch.Size([8, 257, 497])
         # Loss is computed only after stage 1:
@@ -100,7 +104,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
         noise_only = fullnoise_first.to(device) # torch.Size([8, 64000, 8])
         noise_stft = Preprocesing(noise_only, win_len, fs, T, R, device) # torch.Size([8, 8, 514, 497])
 
-        noise_stage1, _, _ = beamformingOpreation(noise_stft, args.mic_ref, W_Stage1) # torch.Size([8, 257, 497])
+        noise_stage1, _, _ = beamformingOpreation(noise_stft, args.mic_ref, W_Stage1_left) # torch.Size([8, 257, 497])
         #noise_stage2 = torch.mul(torch.conj(W_Stage2), noise_stage1) # torch.Size([8, 257, 497]) (B,F,L)
         # Loss is computed only after stage 1:
         abs_squared_noise = torch.abs(noise_stage1) ** 2
@@ -117,7 +121,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
         DIR_noise_stft = return_as_complex(DIR_noise_stft) # torch.Size([8, 8, 257, 497])
         #X_STFT = return_as_complex(X_stft)  # torch.Size([8, 8, 257, 497])
         White_Noise_STFT = Y-X_stft-DIR_noise_stft  # torch.Size([8, 8, 257, 497])
-        white_noise_stage1 = torch.mul(torch.conj(W_Stage1), White_Noise_STFT)
+        white_noise_stage1 = torch.mul(torch.conj(W_Stage1_left), White_Noise_STFT)
         white_noise_stage1 = torch.sum(white_noise_stage1, dim=1) # torch.Size([8, 257, 497])
         #white_noise_stage2 = torch.mul(torch.conj(W_Stage2), white_noise_stage1) # torch.Size([8, 257, 497]) (B,F,L)
         # Loss is computed only after stage1:
@@ -131,9 +135,9 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
         noise_only = fullnoise_first.to(device) # torch.Size([8, 64000, 8])
         noise_stft = Preprocesing(noise_only, win_len, fs, T, R, device) # torch.Size([8, 8, 514, 497])
 
-        noise_stage1, _, _ = beamformingOpreation(noise_stft, args.mic_ref, W_Stage1) # torch.Size([8, 257, 497])
+        noise_stage1, _, _ = beamformingOpreation(noise_stft, args.mic_ref, W_Stage1_left) # torch.Size([8, 257, 497])
         #SNR COMPARING FOR DEBUGGING
-        Speech_stage1 = torch.mul(torch.conj(W_Stage1), X_stft) # B,M,F,L = B,8,257,497
+        Speech_stage1 = torch.mul(torch.conj(W_Stage1_left), X_stft) # B,M,F,L = B,8,257,497
         Speech_stage1 = torch.sum(Speech_stage1, dim=1)         # B,F,L = B,257,497
 
         speech_stage1_time = Postprocessing(Speech_stage1,R,win_len,device) #torch.Size([8, 64000])
@@ -153,7 +157,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
 # This also works for 2 directional noise
     if args.white_only_enable>0:
         white_noise_stft = Y-X_stft # torch.Size([8, 8, 257, 497])
-        white_noise_stage1 = torch.mul(torch.conj(W_Stage1), white_noise_stft) # torch.Size([8, 8, 257, 497])
+        white_noise_stage1 = torch.mul(torch.conj(W_Stage1_left), white_noise_stft) # torch.Size([8, 8, 257, 497])
         white_noise_stage1 = torch.sum(white_noise_stage1, dim=1) # torch.Size([8, 257, 497]) ( B = 8 ) # Beamforming operation
         #white_noise_stage2 = torch.mul(torch.conj(W_Stage2), white_noise_stage1) # torch.Size([8, 257, 497]) (B,F,L)
         # Loss is computed only after stage1:
@@ -168,7 +172,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
         two_directional_noises = fullnoise_first.to(device)+ white_noise.to(device)  #+ fullnoise_second.to(device) + white_noise.to(device) # torch.Size([8, 64000, 8])
         two_noises_stft = Preprocesing(two_directional_noises, win_len, fs, T, R, device)#  torch.Size([8, 8, 514, 497]) 
         two_noises_stft =  return_as_complex(two_noises_stft) #torch.Size([8, 8, 257, 497]) 
-        # two_directional_noises_stage1 = torch.mul(torch.conj(W_Stage1), two_noises_stft) # torch.Size([8, 8, 257, 497])
+        # two_directional_noises_stage1 = torch.mul(torch.conj(W_Stage1_left), two_noises_stft) # torch.Size([8, 8, 257, 497])
         # two_directional_noises_stage1 = torch.sum(two_directional_noises_stage1, dim=1) # torch.Size([8, 1, 497]) ( B = 8 ) # Beamforming operation
         # #white_noise_stage2 = torch.mul(torch.conj(W_Stage2), white_noise_stage1) # torch.Size([8, 257, 497]) (B,F,L)
         # # Loss is computed only after stage1:
@@ -182,8 +186,8 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
                 # two_noises_stft: (B, M, F, L)
         B, M, F, L = two_noises_stft.shape
 
-        # Prepare W_Stage1: (B, M, F)
-        W = W_Stage1  # (already conjugated, right?) torch.Size([16, 8, 257, 1])
+        # Prepare W_Stage1_left: (B, M, F)
+        W = W_Stage1_left  # (already conjugated, right?) torch.Size([16, 8, 257, 1])
 
         # First, normalize dimensions for easier multiplication
         two_noises_stft = two_noises_stft.permute(0, 2, 3, 1)  # (B, F, L, M) torch.Size([16, 257, 497, 8])
@@ -197,7 +201,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
 
         # covariance_white = torch.matmul(
         #     white_noises_stft.conj().transpose(-1, -2),  # (B, F, M, L)
-        #     white_noises_stft  # (B, F, L, M)
+        #     white_noises_stft  # (B, F, L, M)98-0]
         # ) / L  # mean over time frames
         # W needs to be (B, F, M, 1) for matmul
         W = W.permute(0, 2, 1, 3)  # (B, F, M, 1)  # (B, F, M, 1)
@@ -227,7 +231,7 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
 
         ## SI-SDR
     if args.weight_L1_regularization > 0:
-        loss_W_L1 = torch.mean(torch.abs(W_Stage1))
+        loss_W_L1 = torch.mean(torch.abs(W_Stage1_left))
         total_loss += loss_W_L1 * args.weight_L1_regularization
 
 
@@ -236,11 +240,34 @@ def compute_loss(x, X_stft, Y, X_hat_Stage1, X_hat_Stage2,x_hat_stage2_time, W_S
     ## SI-SDR
     if args.beta_SISDR> 0:
 
-        x_hat_stage1 = Postprocessing(X_hat_Stage1,R,win_len,device) #torch.Size([16, 64000])
-        x_original = Postprocessing(X_stft[:, args.mic_ref,:,:],R,win_len,device) #X_stft.shape is torch.Size([16, 8, 257, 497])
-        si_sdr_loss = si_sdr(x_original,x_hat_stage1)
+        X_hat_Stage1_left_time = Postprocessing(X_hat_Stage1_left,R,win_len,device) #torch.Size([16, 64000])
+        x_original_left = Postprocessing(X_stft[:, args.mic_ref_left,:,:],R,win_len,device) #X_stft.shape is torch.Size([16, 8, 257, 497])
+        si_sdr_loss_left = si_sdr(x_original_left,X_hat_Stage1_left_time)
 
-        total_loss -=si_sdr_loss*args.beta_SISDR
+        total_loss -=si_sdr_loss_left*args.beta_SISDR
+
+    if args.beta_SISDR> 0:
+
+        X_hat_Stage1_right_time = Postprocessing(X_hat_Stage1_right,R,win_len,device) #torch.Size([16, 64000])
+        x_original_right = Postprocessing(X_stft[:, args.mic_ref_right,:,:],R,win_len,device) #X_stft.shape is torch.Size([16, 8, 257, 497])
+        si_sdr_loss_right = si_sdr(x_original_right,X_hat_Stage1_right_time)
+
+        total_loss -=si_sdr_loss_right*args.beta_SISDR
 
 
-    return total_loss,loss_L1, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white, SNR_output,si_sdr_loss, cost_minimum_variance_two,loss_W_L1
+    ## L2 loss
+
+    def l2_stft(a, b):
+        return torch.mean(torch.abs(a - b) ** 2)
+
+
+
+    if args.beta_L2_loss> 0:
+
+        loss_L2_stft_left  = l2_stft(X_hat_Stage1_left, X_stft[:, args.mic_ref_left,:,:])
+        loss_L2_stft_right = l2_stft(X_hat_Stage1_right, X_stft[:, args.mic_ref_right,:,:])
+        total_loss +=(loss_L2_stft_left+loss_L2_stft_right)*args.beta_L2_loss
+
+
+
+    return total_loss,loss_L1, cost_distortionless, cost_minimum_variance_dir, cost_minimum_variance_white, SNR_output,si_sdr_loss_left,si_sdr_loss_right, cost_minimum_variance_two,loss_W_L1, loss_L2_stft_left,loss_L2_stft_right

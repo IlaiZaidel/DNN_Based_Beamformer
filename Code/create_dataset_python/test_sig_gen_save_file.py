@@ -5,7 +5,7 @@ import soundfile as sf
 import scipy.io as sio
 
 # ==== USER SETTINGS ====
-MAT_PATH = "/dsi/gannot-lab1/datasets/Ilai_data/Tracking_Signal_Gen_Data/Test_Signal_Gen/clean_example_0000000.mat"
+MAT_PATH = "/dsi/gannot-lab1/datasets/Ilai_data/Tracking_Signal_Gen_Data/Train_Rev_Signal_Gen_with_rir/clean_example_0006654.mat"
 FS = 16000  # Hz (update if your data used a different fs)
 OUT_SUFFIX = "_stereo.wav"
 # =======================
