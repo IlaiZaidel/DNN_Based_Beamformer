@@ -19,7 +19,7 @@ from utils import Preprocesing, Postprocessing, return_as_complex
 
 MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_10_2025_BABBLE_ATTEN_DUAL_TRUE_RIRS/TEST_STFT_domain_results_28_10_2025__21_56_28_0.mat"
 # MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_10_2025_BABBLE_ATTEN_DUAL/TEST_STFT_domain_results_28_10_2025__22_04_07_0.mat"
-MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/28_10_2025_BABBLE_ATTEN_MIX/TEST_STFT_domain_results_28_10_2025__22_14_30_0.mat"
+MAT_FILE = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/29_11_BABBLE_ATTEN_TRUE_RIRS_Two_Speakers/TEST_STFT_domain_results_30_11_2025__02_33_11_0.mat"
 SURROUND_DIR  = "/dsi/gannot-lab/gannot-lab1/datasets/Ilai_data/Correct_White_Beampattern_Surround"
 OUT_ROOT      = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/beampattern_gifs"
 CSV_FILE      = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_test.csv"
@@ -33,7 +33,7 @@ HOP           = WIN_LENGTH // 4
 FRAME_STRIDE  = 10
 MAX_FRAMES    = 60
 VIDEO_FPS     = 8
-INDEX         =2
+INDEX         =5
 # Spectrogram color scale
 SPEC_DB_MIN   = -60.0
 SPEC_DB_MAX   = 0.0

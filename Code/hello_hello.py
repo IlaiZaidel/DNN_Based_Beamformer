@@ -5,7 +5,8 @@ import numpy as np
 #mat_file_path = "/dsi/gannot-lab1/datasets/Ilai_data/Two_Directional_Noises_Train" # 'feature', 'fulloriginal', 'fullnoise', 'target_s'
 #mat_file_path ="/home/dsi/43rrrilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025/TEST_STFT_domain_results_25_03_2025__12_30_27_0.mat"
 #mat_file_path ="/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/25_03_2025/TEST_time_domain_results_25_03_2025__12_30_27_0.mat"
-mat_file_path = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/02_09_2025/TEST_time_domain_results_02_09_2025__19_54_18_0.mat"
+mat_file_path = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/23_12_Augmented_Langrangian_first_try/TEST_time_domain_results_23_12_2025__11_15_34_0.mat"
+
 mat_data = scipy.io.loadmat(mat_file_path)
 print("Keys in mat_data:", mat_data.keys())
 
@@ -18,7 +19,7 @@ def normalize(signal):
         return signal  # Return unmodified if max is zero (e.g., silence)
 
 # Extract the desired signal (e.g., 'y')
-audio_signals = mat_data['x_hat_stage1'] #  'y', 'x_hat_stage1', 'x_hat_stage2'
+audio_signals = mat_data['x_hat_stage1_left'] #  'y', 'x_hat_stage1_left', 'x_hat_stage2'
 print(f"Audio signals shape: {audio_signals.shape}")
 print(f"Audio signals dtype: {audio_signals.dtype}")
 
@@ -46,13 +47,13 @@ for i in range(num_examples):
     # Case: multichannel → stereo from first & last mic
     if sig.ndim == 2 and sig.shape[1] >= 2:
         stereo_sig = np.stack([sig[:, 0], sig[:, -1]], axis=-1)  # shape (T, 2)
-        output_file = f"02_09_y_{i}.wav"
+        output_file = f"23_12_Augmented_Langrangian_first_try_y_{i}.wav"
         sf.write(output_file, stereo_sig, sample_rate)
         print(f"Saved stereo audio example {i} to {output_file}")
 
     # Case: mono
     else:
-        output_file = f"02_09_x_hat_stage1_{i}.wav"
+        output_file = f"23_12_Augmented_Langrangian_first_try_x_hat_stage1_{i}.wav"
         sf.write(output_file, sig, sample_rate)
         print(f"Saved mono audio example {i} to {output_file}")
 

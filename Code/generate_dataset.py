@@ -17,7 +17,7 @@ from utils import true_rtf_from_all_rirs
 import soundfile as sf
 from utils import snr_np
 import sys
-
+import math
 import os, sys, importlib
 
 SIGGEN_DIR = "/home/dsi/ilaiz/DNN_Based_Beamformer/Code/signal_generator_rtf_output"  # folder that holds signal_generator.so
@@ -682,3 +682,235 @@ class GeneratedDataTrackingFromCleanPinkNoise(Dataset):
 
 
         return y, d, n1, v, all_rirs
+    
+
+
+
+# ----------------- main dataset -----------------
+class GeneratedData_Two_Static_Speakers_Babble(Dataset):
+    """
+    Loads clean multichannel speech (from .mat) and precomputed multichannel babble (from .wav),
+    then does SNR scaling (babble vs. clean @ ref mic), adds white noise, and returns tensors.
+
+    __getitem__ returns:
+        y : (N, M)  torch.float32  # mixture
+        d : (N, M)  torch.float32  # clean (with noise-only head)
+        b : (N, M)  torch.float32  # babble (scaled)
+        v : (N, M)  torch.float32  # white noise (scaled)
+    """
+    def __init__(self, cfg, mode="train"):
+        self.cfg = cfg
+        csv_path = cfg.dataset.df_path_train if mode == "train" else cfg.dataset.df_path_test
+
+        import pandas as pd
+        self.df = pd.read_csv(csv_path)
+
+        # Clean .mat location/prefix
+        self.clean_dir = cfg.paths.train_path if mode == "train" else cfg.paths.test_path
+        self.clean_prefix = getattr(cfg, "clean_prefix", "clean_example_")
+
+        # Babble folder (precomputed multichannel wavs)
+        self.babble_dir = cfg.paths.babble_noise_train_path if mode == "train" else cfg.paths.babble_noise_test_path
+
+        # Cache frequently used params
+        self.fs  = int(getattr(cfg.params, "fs", 16000))
+        self.T   = float(getattr(cfg.params, "T", 4.0))
+        self.N   = int(self.fs * self.T)
+        # mic_ref in your code is 1-based (train loop uses mic_ref-1 for slicing)
+        self.mic_ref = int(getattr(cfg.params, "mic_ref", 4))
+        self.noise_only_time = float(getattr(cfg.params, "noise_only_time", 0.5))
+        self.SNR_babble_db = random.uniform(3.0, 12.0)  if mode == "train" else 6 # random.uniform(5.0, 8.0)
+        self.SNR_white_db  = float(getattr(cfg.params, "SNR_white_db", 30.0))
+
+    def __len__(self):
+        return len(self.df)
+
+    def _mat_path(self, idx: int) -> str:
+        return os.path.join(self.clean_dir, f"{self.clean_prefix}{idx:07d}.mat")
+
+    def _babble_path(self, idx: int) -> str:
+        # matches precompute naming: babble_{idx:07d}.wav
+        return os.path.join(self.babble_dir, f"babble_{idx:07d}.wav")
+
+    def __getitem__(self, idx: int):
+        C_K = self.cfg.params.ck
+        row1 = self.df.iloc[idx]
+        row2 = self.df.iloc[(idx + 1) % len(self.df)]  # second speaker uses next row’s wav
+
+        fs = self.fs
+        T_sec = self.T
+        N = int(fs * T_sec)
+        noise_only_samples = int(self.noise_only_time * fs)
+
+        # ==========================================================
+        # ---------- ROOM GEOMETRY FROM ROW1 ONLY -------------------
+        # ==========================================================
+        L = [float(row1["room_x"]), float(row1["room_y"]), float(row1["room_z"])]
+        beta = [float(row1["beta"])] * 6
+        n_taps = int(row1["n"])
+        mic_positions = np.array(ast.literal_eval(row1["mic_positions"]), dtype=np.float64)
+        M = mic_positions.shape[0]
+
+        # speaker 1 at its own location
+        spk1_pos = [
+            float(row1["speaker_start_x"]),
+            float(row1["speaker_start_y"]),
+            float(row1["speaker_start_z"])
+        ]
+
+        # speaker 2 at noise1 location (relative angle)
+        spk2_pos = [
+            float(row1["noise1_x"]),
+            float(row1["noise1_y"]),
+            float(row1["noise1_z"])
+        ]
+
+        # ==========================================================
+        # ---------- LOAD WAV OF SPEAKER 1 -------------------------
+        # ==========================================================
+        wav1 = row1["speaker_path"]
+        OLD_PREFIX = "/dsi/gannot-lab1/datasets/LibriSpeech/LibriSpeech/"
+        NEW_PREFIX = "/dsi/gannot-lab/gannot-lab1/datasets/LibriSpeech/LibriSpeech/"
+        if isinstance(wav1, str) and wav1.startswith(OLD_PREFIX):
+            wav1 = wav1.replace(OLD_PREFIX, NEW_PREFIX)
+
+        x1, fs_file = sf.read(wav1)
+        # if x1.ndim > 1:
+        #     x1 = x1[:, 0]
+        # if fs_file != fs:
+        #     raise RuntimeError("fs mismatch")
+
+        # ensure long enough
+        if len(x1) < N:
+            reps = math.ceil(N / len(x1))
+            x1 = np.tile(x1, reps)
+
+        # find speech onset
+        thr1 = 0.02 * np.max(np.abs(x1) + 1e-12)
+        start1 = 0
+        for n in range(len(x1)):
+            if abs(x1[n]) > thr1:
+                start1 = n
+                break
+
+        # cut & align speaker 1
+        x1_cut = x1[start1 : start1 + (N - noise_only_samples)]
+        if len(x1_cut) < (N - noise_only_samples):
+            reps = math.ceil((N - noise_only_samples) / len(x1_cut))
+            x1_cut = np.tile(x1_cut, reps)[:(N - noise_only_samples)]
+
+        x1_final = np.concatenate([
+            np.zeros(noise_only_samples, dtype=np.float32),
+            x1_cut[:(N - noise_only_samples)].astype(np.float32)
+        ], axis=0)
+
+        # ==========================================================
+        # ---------- LOAD WAV OF SPEAKER 2 -------------------------
+        # ==========================================================
+        wav2 = row2["speaker_path"]
+        if isinstance(wav2, str) and wav2.startswith(OLD_PREFIX):
+            wav2 = wav2.replace(OLD_PREFIX, NEW_PREFIX)
+
+        x2, fs_file2 = sf.read(wav2)
+        if x2.ndim > 1:
+            x2 = x2[:, 0]
+        if fs_file2 != fs:
+            raise RuntimeError("fs mismatch")
+
+        if len(x2) < N:
+            reps = math.ceil(N / len(x2))
+            x2 = np.tile(x2, reps)
+
+        thr2 = 0.02 * np.max(np.abs(x2) + 1e-12)
+        start2 = 0
+        for n in range(len(x2)):
+            if abs(x2[n]) > thr2:
+                start2 = n
+                break
+
+        x2_cut = x2[start2 : start2 + (N - noise_only_samples)]
+        if len(x2_cut) < (N - noise_only_samples):
+            reps = math.ceil((N - noise_only_samples) / len(x2_cut))
+            x2_cut = np.tile(x2_cut, reps)[:(N - noise_only_samples)]
+
+        x2_final = np.concatenate([
+            np.zeros(noise_only_samples, dtype=np.float32),
+            x2_cut[:(N - noise_only_samples)].astype(np.float32)
+        ], axis=0)
+
+        # ==========================================================
+        # ---------- RIR GENERATION FOR TWO STATIC SPEAKERS --------
+        # ==========================================================
+        h1 = np.array(
+            rir_generat(
+                C_K, fs, mic_positions, spk1_pos, L, beta, n_taps
+            )
+        ).T.astype(np.float32)  # (M, n_taps)
+
+        h2 = np.array(
+            rir_generat(
+                C_K, fs, mic_positions, spk2_pos, L, beta, n_taps
+            )
+        ).T.astype(np.float32)  # (M, n_taps)
+
+        # all_rirs shape (2, M, n_taps)
+        # all_rirs = np.stack([h1, h2], axis=0)
+
+        # ==========================================================
+        # ---------- CONVOLVE SPEAKERS TO MULTICHANNEL ------------
+        # ==========================================================
+        d1 = np.zeros((N, M), dtype=np.float32)
+        d2 = np.zeros((N, M), dtype=np.float32)
+
+        for m in range(M):
+            d1[:, m] = signal.lfilter(h1[m], [1.0], x1_final)[:N]
+            d2[:, m] = signal.lfilter(h2[m], [1.0], x2_final)[:N]
+
+        d = d1 + d2
+
+        # ==========================================================
+        # ---------- LOAD BABBLE MULTICHANNEL WAV ------------------
+        # ==========================================================
+        babble_path = os.path.join(self.babble_dir, f"babble_{idx:07d}.wav")
+        babble, sr_b = sf.read(babble_path, always_2d=True)
+        babble = babble.astype(np.float32)
+
+        if babble.shape[0] < N:
+            reps = math.ceil(N / babble.shape[0])
+            babble = np.tile(babble, (reps, 1))
+
+        babble = babble[:N, :M]
+
+        # ==========================================================
+        # ---------- SNR SCALE BABBLE ------------------------------
+        # ==========================================================
+        ref = self.mic_ref - 1
+        d_power = float(np.sum(d[:, ref] ** 2) + 1e-12)
+        b_power = float(np.sum(babble[:, ref] ** 2) + 1e-12)
+        scale_b = np.sqrt(d_power * 10 ** (-self.SNR_babble_db / 10.0) / b_power).astype(np.float32)
+        babble *= scale_b
+
+        # ==========================================================
+        # ---------- WHITE NOISE -----------------------------------
+        # ==========================================================
+        v = np.random.randn(N, M).astype(np.float32)
+        v_power = float(np.sum(v[:, ref] ** 2) + 1e-12)
+        scale_v = np.sqrt(d_power * 10 ** (-self.SNR_white_db / 10.0) / v_power).astype(np.float32)
+        v *= scale_v
+
+        # ==========================================================
+        # ---------- FINAL MIX & NORMALIZE -------------------------
+        # ==========================================================
+        y = d + babble + v
+        peak = float(np.max(np.abs(y)) + 1e-12)
+
+        y      = (y      / peak).astype(np.float32)
+        d      = (d      / peak).astype(np.float32)
+        d1     = (d1     / peak).astype(np.float32)
+        d2     = (d2     / peak).astype(np.float32)
+        babble = (babble / peak).astype(np.float32)
+        v      = (v      / peak).astype(np.float32)
+
+
+        return y, d, d1, d2, babble, v, h1, h2
+    

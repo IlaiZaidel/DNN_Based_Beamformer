@@ -320,3 +320,52 @@ def true_rtf_from_all_rirs_batch(all_rirs, win_len, ref_mic, window="hamming", e
     H_norm = H / denom[:, None, :, :]
 
     return H_norm.permute(0, 1, 3, 2).to(torch.complex64)
+
+
+
+import torch
+import torch.nn.functional as F
+
+def true_rtf_from_rirs_bmk(rirs_bmk, win_len, ref_mic, use_window=True, eps=1e-12):
+    """
+    rirs_bmk : (B, M, K) real tensor (any device)
+        B = batch size
+        M = number of microphones
+        K = RIR length (samples)
+
+    win_len : FFT size (number of frequency bins)
+    ref_mic : index of reference microphone (0 <= ref_mic < M)
+
+    Returns
+    -------
+    A_true : (B, M, F) complex64 tensor
+        F = win_len
+        A_true[b, m, f] = H_m(f) / H_ref(f)
+    """
+    B, M, K = rirs_bmk.shape
+
+    # --- cut / pad to win_len ---
+    if K >= win_len:
+        h_seg = rirs_bmk[..., :win_len]          # (B, M, win_len)
+    else:
+        pad = (0, win_len - K)                   # pad on the right of last dim
+        h_seg = F.pad(rirs_bmk, pad)             # (B, M, win_len)
+
+    # --- optional window ---
+    if use_window:
+        w = torch.hamming_window(
+            win_len,
+            periodic=True,
+            device=rirs_bmk.device,
+            dtype=rirs_bmk.dtype,
+        )                                        # (win_len,)
+        h_seg = h_seg * w                        # broadcast to (B, M, win_len)
+
+    # --- FFT over time (RIR length) ---
+    H = torch.fft.fft(h_seg.to(torch.complex64), n=win_len, dim=-1)  # (B, M, F)
+
+    # --- normalize by reference mic to get RTF ---
+    denom = H[:, ref_mic, :] + eps              # (B, F)
+    A_true = H / denom[:, None, :]              # (B, M, F)
+
+    return A_true  # (B, M, F) complex64

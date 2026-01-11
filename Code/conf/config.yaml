@@ -24,7 +24,7 @@ params:
   two_dir_noise: 0 # 1/100 - Normalizing it to be 1 "${params.mu}/(1 - ${params.mu})"                                                       # Important
   weight_L1_regularization: 0
   noise_only_time: 0.5
-  mic_ref_left: 0
+  mic_ref_left: 3
   mic_ref_right: 7
   beta_L2_loss: 0 # 10
 modelParams:
@@ -35,17 +35,18 @@ modelParams:
   channelsStage2: 1           # Number of input channels for stage2
   numFeatures:  (${params.fs}*${params.T} - ${params.win_length})/(${params.R}) + 1 # Number of features (number of frames) at the end of stage1
   noise_only_time: 0.5
-  mic_ref_left: 0
+  mic_ref_left: 3
   mic_ref_right: 7
   use_true_rirs: 1
   DUAL_MODEL: 1
   beta_past: 0.98
+  mic_ref: 4   
   
   
 
 # ============= Device =============
 device:
-  device_num: 2 # Device number # Changed from 0
+  device_num: 3 # Device number # Changed from 0
 
 # ============ Criterion ============
 loss:
@@ -53,10 +54,10 @@ loss:
   norm: 0  # Normalization flag: If to normalize the inputs to the function by using alpha = dot(x_hat,x)/dot(x,x)
 
 # ========== data-sets ==============
-# Define main paths for datasets, models, and special cases
+# Define main paths for datasets, models, and special casess
 data_set_path: /dsi/gannot-lab/gannot-lab1/datasets/Ilai_data/ # /home/dsi/ilaiz/DNN_Based_Beamformer/Code/processed_data  #/home/dsi/ilaiz/DNN_Based_Beamformer/Code//Dataset/Non-Reverberant Environment/Speaker Switch # Main path of the dataset
-model_path:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/18_11_BABBLE_ATTEN_TRUE_RIRS_REVER #'/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/'     # Main path of the model
-folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/18_11_BABBLE_ATTEN_TRUE_RIRS_REVER # The main name of the results folder  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/30_12_2024   # 
+model_path:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Trained_Models/09_01_RTF_Penalty_TI_No_Minimum_Variance #'/home/dsi/ilaiz/DNN_Based_Beamformer/Code/Models/'     # Main path of the model
+folder_name:   /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/09_01_RTF_Penalty_TI_No_Minimum_Variance # The main name of the results folder  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/30_12_2024   # 
 # For beampattern analysis:
 # Model results:
 #folder_name:  /home/dsi/ilaiz/DNN_Based_Beamformer/Code/Ilai_Results_Non_Reverberant_Environment/ADI_2_noises_25_03
@@ -83,7 +84,7 @@ model_hp:
   train_size_spilt: 0.75      # Training size split
   val_size_spilt: 0.25        # Validation size split
   batchSize: 8   #16   #8         # Number of samples in a mini-batch
-  epochs: 30                 # Maximum number of iterations   
+  epochs: 100                 # Maximum number of iterations   
   data_loader_shuffle: False   # Flag to shuffle data in data loader (train & val)
   test_loader_shuffle: False  # Flag to shuffle data in test loader
 
@@ -100,6 +101,6 @@ hydra:
 
 # ========== Dataset ==========
 dataset:
-  df_path_train: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_train.csv
+  df_path_train: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_train_speechFromTrain.csv
   df_path_test: /home/dsi/ilaiz/DNN_Based_Beamformer/Code/create_dataset_python/room_parameters_tracking_test.csv
   

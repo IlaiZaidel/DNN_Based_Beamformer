@@ -298,7 +298,7 @@ class PhysCorrFeat(nn.Module):
     
 
 
-class AttentionFusionBlock(nn.Module):
+class AttentionFusionBlock_Local(nn.Module):
     """
     Local temporal cross-attention between mixture and RTF.
     Acts as a learned subspace-tracking filter per frequency bin.
@@ -488,5 +488,206 @@ class UNETDualInput(nn.Module):
         d = d.permute(0, 1, 3, 2)        # [B, C, T, F]
         d = self.dense(d)                # linear over F
         d = d.permute(0, 1, 3, 2)        # [B, C, F, T]
+
+        return d, last_skip
+
+class AttentionFusionBlock(nn.Module):
+    """
+    Cross-attention between mixture and a single RTF.
+    mix, rtf: [B, C, F, T]
+    returns: fused [B, stem_ch, F, T]
+    """
+
+    def __init__(self, rtf_in_ch, mix_in_ch,
+                 stem_ch=8, num_heads=1):
+        super().__init__()
+
+        # --- light feature stems ---
+        self.rtf_stem = nn.Sequential(
+            nn.Conv2d(rtf_in_ch, stem_ch, 3, padding=1),
+            nn.BatchNorm2d(stem_ch),
+            nn.LeakyReLU(inplace=True),
+        )
+        self.mix_stem = nn.Sequential(
+            nn.Conv2d(mix_in_ch, stem_ch, 3, padding=1),
+            nn.BatchNorm2d(stem_ch),
+            nn.LeakyReLU(inplace=True),
+        )
+
+        # --- full temporal cross-attention (per frequency) ---
+        self.attn = nn.MultiheadAttention(embed_dim=stem_ch,
+                                          num_heads=num_heads,
+                                          batch_first=True)
+        self.norm = nn.LayerNorm(stem_ch)
+
+        self.post = nn.Sequential(
+            nn.Conv2d(stem_ch, stem_ch, 3, padding=1),
+            nn.BatchNorm2d(stem_ch),
+            nn.LeakyReLU(inplace=True),
+        )
+
+    def forward(self, mix, rtf):
+        """
+        mix, rtf: [B, C, F, T]
+        """
+        B, _, F, T = mix.shape
+
+        # --- stems ---
+        mix_s = self.mix_stem(mix)   # [B, S, F, T]
+        rtf_s = self.rtf_stem(rtf)   # [B, S, F, T]
+
+        # per-frequency sequences along time: [B*F, T, S]
+        mix_flat = mix_s.permute(0, 2, 3, 1).reshape(B * F, T, -1)
+        rtf_flat = rtf_s.permute(0, 2, 3, 1).reshape(B * F, T, -1)
+
+        # Q = mixture, K/V = RTF
+        attn_out, _ = self.attn(mix_flat, rtf_flat, rtf_flat)
+        fused = self.norm(mix_flat + attn_out)   # residual
+
+        # reshape back to [B, S, F, T]
+        fused = fused.reshape(B, F, T, -1).permute(0, 3, 1, 2)
+        return self.post(fused)
+    
+
+
+
+
+    
+class UNETDualInput_Two_Speakers(nn.Module):
+    """
+    Dual-input UNet with *two* RTFs, using local temporal cross-attention:
+      - Inputs: 
+          mix       [B, C_mix, F, T]
+          rtf_first [B, C_rtf, F, T]
+          rtf_right [B, C_rtf, F, T]
+      - Stage 0: 
+          Local-attn fuse (mix, rtf_first) and (mix, rtf_right),
+          then concat both fusions with the raw mix -> encoder.
+    """
+
+    def __init__(
+        self,
+        rtf_in_ch: int,
+        mix_in_ch: int,
+        out_channels: int,
+        activation: str = 'tanh',
+        EnableSkipAttention: int = 0,
+        stem_each=4,
+        num_heads=1,
+        attn_win=24,
+        stride=24,
+    ):
+        super().__init__()
+        self.EnableSkipAttention = EnableSkipAttention
+        self.out_channels = out_channels
+        self.stem_each = stem_each
+
+        # shared local attention block for both RTFs (weight sharing)
+        self.local_attn = AttentionFusionBlock_Local(
+            rtf_in_ch=rtf_in_ch,
+            mix_in_ch=mix_in_ch,
+            stem_ch=stem_each,
+            num_heads=num_heads,
+            attn_win=attn_win,
+            stride=stride,
+        )
+
+        # channels: fusion for RTF1 (stem_each) + RTF2 (stem_each) + raw mix
+        in_channel = 2 * stem_each + mix_in_ch
+        self.out_ch = in_channel
+
+        # ---- Encoder ----
+        self.conv_block_1 = CausalConvBlock(in_channel, 32,  (6, 3), (2, 2))
+        self.conv_block_2 = CausalConvBlock(32,        32,  (7, 4), (2, 2))
+        self.conv_block_3 = CausalConvBlock(32,        64,  (7, 5), (2, 2))
+        self.conv_block_4 = CausalConvBlock(64,        64,  (6, 6), (2, 2))
+        self.conv_block_5 = CausalConvBlock(64,        96,  (6, 6), (2, 2))
+        self.conv_block_6 = CausalConvBlock(96,        96,  (6, 6), (2, 2))
+        self.conv_block_7 = CausalConvBlock(96,        128, (2, 2), (2, 2))
+        self.conv_block_8 = CausalConvBlock(128,       256, (2, 2), (1, 1))
+
+        # ---- Decoder ----
+        self.tran_conv_block_1 = nn.Sequential(
+            nn.ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(1, 1)),
+            nn.BatchNorm2d(256),
+            nn.Dropout2d(0.5),
+            nn.LeakyReLU(inplace=True),
+        )
+        self.tran_conv_block_2 = CausalTransConvBlock(256, 128, (2, 2), (2, 2))
+        self.tran_conv_block_3 = CausalTransConvBlock(128, 96,  (6, 6), (2, 2))
+        self.tran_conv_block_4 = CausalTransConvBlock(96,  96,  (6, 6), (2, 2))
+        self.tran_conv_block_5 = CausalTransConvBlock(96,  64,  (6, 6), (2, 2))
+        self.tran_conv_block_6 = CausalTransConvBlock(64,  64,  (7, 5), (2, 2))
+        self.tran_conv_block_7 = CausalTransConvBlock(64,  32,  (7, 4), (2, 2))
+        self.tran_conv_block_8 = CausalTransConvBlock(32,  32,  (6, 3), (2, 2))
+
+        # ---- Last block ----
+        if EnableSkipAttention == 0:
+            self.last_conv_block = nn.Sequential(
+                nn.Conv2d(32, out_channels, kernel_size=1, stride=1),
+                nn.BatchNorm2d(out_channels),
+                nn.Dropout2d(0.5),
+                nn.LeakyReLU(inplace=True),
+            )
+        else:
+            self.last_conv_block = CausalTransConvBlock(32, out_channels, (1, 1), (1, 1))
+
+        # ---- Dense tail over F=514 ----
+        if activation == 'tanh':
+            self.dense = nn.Sequential(nn.Linear(514, 514), nn.Tanh())
+        else:
+            self.dense = nn.Sequential(nn.Linear(514, 514), nn.Sigmoid())
+
+    def forward(self, mix, rtf_first, rtf_right, DUAL_MODEL):
+        """
+        mix      : [B, C_mix, 514, T]
+        rtf_first: [B, C_rtf, 514, T]
+        rtf_right: [B, C_rtf, 514, T]
+        """
+
+        if DUAL_MODEL == 0:
+            rtf_first = torch.zeros_like(rtf_first)
+            rtf_right = torch.zeros_like(rtf_right)
+
+        # --- local attention fusions ---
+        x1 = self.local_attn(mix, rtf_first)   # [B, stem_each, F, T]
+        x2 = self.local_attn(mix, rtf_right)   # [B, stem_each, F, T]
+
+        # concat both fusions + raw mix
+        x = torch.cat([x1, x2, mix], dim=1)    # [B, 2*stem_each + C_mix, F, T]
+
+        # ---- encoder ----
+        e1 = self.conv_block_1(x)
+        e2 = self.conv_block_2(e1)
+        e3 = self.conv_block_3(e2)
+        e4 = self.conv_block_4(e3)
+        e5 = self.conv_block_5(e4)
+        e6 = self.conv_block_6(e5)
+        e7 = self.conv_block_7(e6)
+        e8 = self.conv_block_8(e7)
+
+        EnableSkipAtt = 1 if self.EnableSkipAttention else 0
+
+        # ---- decoder ----
+        d = self.tran_conv_block_1(e8)
+        d, _ = self.tran_conv_block_2(d, e7, EnableSkipAtt)
+        d, _ = self.tran_conv_block_3(d, e6, EnableSkipAtt)
+        d, _ = self.tran_conv_block_4(d, e5, EnableSkipAtt)
+        d, _ = self.tran_conv_block_5(d, e4, EnableSkipAtt)
+        d, _ = self.tran_conv_block_6(d, e3, EnableSkipAtt)
+        d, _ = self.tran_conv_block_7(d, e2, EnableSkipAtt)
+        d, _ = self.tran_conv_block_8(d, e1, EnableSkipAtt)
+
+        # ---- last step ----
+        if EnableSkipAtt == 0:
+            d = self.last_conv_block(d)
+            last_skip = None
+        else:
+            d, last_skip = self.last_conv_block(d, mix, EnableSkipAtt)
+
+        # ---- dense over frequency dim (assumed 514) ----
+        d = d.permute(0, 1, 3, 2)   # [B, C, T, F]
+        d = self.dense(d)           # linear over F
+        d = d.permute(0, 1, 3, 2)   # [B, C, F, T]
 
         return d, last_skip

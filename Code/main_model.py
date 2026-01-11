@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.utils
 from torch.utils.data import DataLoader
 #from sklearn.model_selection import train_test_split
-from generate_dataset import GeneratedDataTrackingFromClean,  GeneratedDataTrackingFromCleanBabbleNoise, GeneretedDataTracking_Signal_Generator, GeneratedDataTrackingFromCleanPinkNoise
+from generate_dataset import GeneratedDataTrackingFromClean,  GeneratedData_Two_Static_Speakers_Babble, GeneratedDataTrackingFromCleanBabbleNoise, GeneretedDataTracking_Signal_Generator, GeneratedDataTrackingFromCleanPinkNoise
 import hydra
 import os
 from datetime import datetime
@@ -43,7 +43,7 @@ def main(cfg: CUNETConfig):
     if cfg.SavedModel == 0: # If train the model 
         # Load Data (Train & Val)
         train_path = cfg.paths.train_path
-        train_data = GeneratedDataTrackingFromCleanBabbleNoise(cfg, mode='train')
+        train_data = GeneratedData_Two_Static_Speakers_Babble(cfg, mode='train')
         # Create train & validation set 
         # train_set, val_set = train_test_split(train_data,train_size = cfg.model_hp.train_size_spilt,test_size = cfg.model_hp.val_size_spilt)  
         train_set, val_set = torch.utils.data.random_split(train_data,[cfg.model_hp.train_size_spilt, cfg.model_hp.val_size_spilt])  
@@ -74,9 +74,21 @@ def main(cfg: CUNETConfig):
         val_loss = []
 
         # writer = SummaryWriter(log_dir = cfg.paths.log_path)
+        B = cfg.model_hp.batchSize     # 8
+        F = 257
+        L = 497
+
+        lam_pass = torch.tensor(0.0, device=device) #torch.zeros((B, F, L), dtype=torch.cfloat, device=device)
+        lam_null = torch.tensor(0.0, device=device) #torch.zeros((B, F, L), dtype=torch.cfloat, device=device)
+        # ---- AL state ----
+        rho = cfg.loss.rho_init if hasattr(cfg.loss, "rho_init") else 1
+       
 
         for epoch in tqdm(range(cfg.model_hp.epochs)):
-            epoch_train_loss,epoch_val_loss = train(model, cfg.params, cfg.paths.results_path, train_loader, val_loader, optimizer, device, cfg.loss, cfg.debug) 
+
+
+            
+            epoch_train_loss,epoch_val_loss, lam_pass, lam_null  = train(model, cfg.params, cfg.paths.results_path, train_loader, val_loader, optimizer, device, cfg.loss, cfg.debug, rho, lam_pass, lam_null, epoch) 
             train_loss.append(epoch_train_loss / len(train_loader)) # divide by number of batches, to get mean loss for each epoch
             val_loss.append(epoch_val_loss / len(val_loader))       # divide by number of batches, to get mean loss for each epoch 
             
@@ -116,7 +128,7 @@ def main(cfg: CUNETConfig):
     # Test - Data Loader
     # test_path = cfg.paths.test_path
     # test_data = GeneretedInputOutput(test_path,cfg.params.mic_ref)
-    test_data =  GeneratedDataTrackingFromCleanBabbleNoise(cfg, mode='test')
+    test_data =  GeneratedData_Two_Static_Speakers_Babble(cfg, mode='test')
     test_loader = DataLoader(test_data, batch_size = cfg.model_hp.batchSize, shuffle = cfg.model_hp.test_loader_shuffle)
     
     # Testing
